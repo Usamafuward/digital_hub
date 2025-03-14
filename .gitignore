@@ -1,0 +1,5 @@
+venv
+.env
+.sesskey
+vector_store
+__pycache__/
