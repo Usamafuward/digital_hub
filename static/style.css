@@ -7,7 +7,6 @@ body {
     radial-gradient(circle at 25% 25%, rgba(0, 120, 180, 0.3) 0%, transparent 60%),
     radial-gradient(circle at 75% 75%, rgba(30, 144, 255, 0.3) 0%, transparent 60%),
     radial-gradient(circle at 50% 50%, rgba(0, 102, 204, 0.2) 0%, transparent 70%);
-
     background-attachment: fixed;
 }
 
@@ -40,9 +39,9 @@ body {
 }
 
 @keyframes glow {
-    0% { box-shadow: 0 0 5px rgba(51, 147, 234, 0.5); }
-    50% { box-shadow: 0 0 15px rgba(51, 147, 234, 0.8); }
-    100% { box-shadow: 0 0 5px rgba(51, 147, 234, 0.5); }
+    0% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.5); }
+    50% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.8); }
+    100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.5); }
 }
 
 @keyframes gradientShift {
@@ -129,8 +128,12 @@ button:hover::before {
 }
 
 #message-input {
+    background-color: rgba(30, 58, 138, 0.3);
+    color: white;
+    border: 1px solid rgba(59, 130, 246, 0.5);
+    font-size: 16px;
     transition: all 0.3s ease;
-    border: 1px solid rgba(51, 147, 234, 0.5);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 /* Document Viewer Enhancements */
@@ -154,8 +157,20 @@ button:hover::before {
     box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
 }
 
+#voice-button {
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+    border: 1px solid rgba(59, 130, 246, 0.5);
+}
+
+#voice-button:hover {
+    background: linear-gradient(135deg, #1e3a8a, #2563eb);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
 /* Voice Button Enhancement */
 #voice-button.recording {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
     animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -176,12 +191,10 @@ button:hover::before {
 
 /* Document Resources Enhancement */
 .document-resources {
-    display: flex;
-    flex-wrap: wrap;
     gap: 0.5rem;
     margin-top: 0.75rem;
     padding-top: 0.75rem;
-    border-top: 1px solid rgba(51, 147, 234, 0.3);
+    border-top: 1px solid rgba(59, 130, 246, 0.3);
     background: rgba(0, 128, 192, 0.1);
     border-radius: 0.5rem;
     padding: 0.75rem;
@@ -189,7 +202,7 @@ button:hover::before {
 
 /* Container Transitions */
 .chat-container-minimized {
-    width: 60%;
+    width: 50%;
     transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
@@ -211,12 +224,12 @@ button:hover::before {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(51, 147, 234, 0.5);
+    background: rgba(59, 130, 246, 0.5);
     border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(51, 147, 234, 0.8);
+    background: rgba(59, 130, 246, 0.8);
 }
 
 /* Start Chat Button Enhancement */
@@ -224,6 +237,7 @@ button:hover::before {
     position: relative;
     overflow: hidden;
     transition: all 0.3s ease;
+    background: linear-gradient(135deg, #1e3a8a, #3b82f6);
 }
 
 #start-chat-btn::after {
@@ -294,6 +308,13 @@ button:hover::before {
     position: relative;
     overflow: hidden;
     transition: all 0.3s ease;
+    background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+    border: 1px solid rgba(59, 130, 246, 0.5);
+}
+
+#send-button:hover {
+    background: linear-gradient(135deg, #2563eb, #1e3a8a);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 /* Lucide Icon Animations */
@@ -322,4 +343,20 @@ button:hover .lucide {
 
 #close-doc-btn:hover {
     transform: rotate(90deg);
+}
+
+.text-blue-400 {
+    background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    display: inline-block;
+    font-weight: bold;
+    text-shadow: 0 2px 10px rgba(59, 130, 246, 0.2);
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.text-blue-400 {
+    background-size: 200% 200%;
 }

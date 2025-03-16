@@ -1,6 +1,7 @@
 document.documentElement.setAttribute("class", "dark");
 
 document.addEventListener("DOMContentLoaded", function () {
+  document.getElementById("chat-section").style.display = "none";
   document.getElementById("send-button").addEventListener("click", sendMessage);
   document
     .getElementById("message-input")
@@ -16,6 +17,7 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 function scrollToChat() {
+  document.getElementById("chat-section").style.display = "block";
   setTimeout(() => {
     addQA(
       "Welcome to Support",
@@ -27,7 +29,10 @@ function scrollToChat() {
     .scrollIntoView({ behavior: "smooth" });
   setTimeout(() => {
     document.getElementById("message-input").focus();
-  }, 800);
+  }, 800);setTimeout(() => {
+    document.getElementById("hero-section").style.display = "none";
+  }, 1200);
+  
 }
 
 function addQA(question, answer, references = null) {
@@ -40,14 +45,12 @@ function addQA(question, answer, references = null) {
 
   const messageContainer = document.createElement("div");
   messageContainer.className =
-    "border-l-4 border-blue-900 rounded-r-2xl p-4 w-full shadow-lg backdrop-blur-sm transition-all hover:border-blue-400";
+    "border-l-4 border-blue-500/50 rounded-r-2xl p-4 w-full shadow-lg backdrop-blur-sm transition-all hover:border-blue-500/80";
 
-  // Add question as topic header with improved styling
   const topicHeader = document.createElement("div");
   topicHeader.className =
     "font-bold text-blue-200 text-lg mb-3 border-b border-blue-500/30 pb-2 flex items-center";
 
-  // Add user icon before question
   const userIcon = document.createElement("span");
   userIcon.className = "mr-2 flex-shrink-0";
   userIcon.innerHTML = `
@@ -63,7 +66,6 @@ function addQA(question, answer, references = null) {
   topicHeader.appendChild(userIcon);
   topicHeader.appendChild(questionText);
 
-  // Add answer with improved styling and assistant icon
   const messageContentWrapper = document.createElement("div");
   messageContentWrapper.className = "flex items-start";
 
@@ -84,7 +86,6 @@ function addQA(question, answer, references = null) {
   messageContentWrapper.appendChild(assistantIcon);
   messageContentWrapper.appendChild(messageContent);
 
-  // Append elements to container
   messageContainer.appendChild(topicHeader);
   messageContainer.appendChild(messageContentWrapper);
 
@@ -129,7 +130,6 @@ function addQA(question, answer, references = null) {
     messageContainer.appendChild(docLinksContainer);
   }
 
-  // Add timestamp
   const timestamp = document.createElement("div");
   timestamp.className = "text-xs text-blue-400/60 mt-3 text-right";
   const now = new Date();
@@ -150,7 +150,6 @@ function addQA(question, answer, references = null) {
     typingIndicator.remove();
   }
 
-  // Add subtle fade-in animation
   messageDiv.style.opacity = "0";
   messageDiv.style.transition = "opacity 0.3s ease-in-out";
 
@@ -230,7 +229,7 @@ function handleTrack(event) {
 
   const audioContainer = document.createElement("div");
   audioContainer.className =
-    "border-l-4 border-blue-900 rounded-r-2xl p-4 w-full md:max-w-4xl shadow-lg backdrop-blur-sm transition-all hover:border-blue-400";
+    "border-l-4 border-blue-900 rounded-r-2xl p-4 w-full shadow-lg backdrop-blur-sm transition-all hover:border-blue-400";
 
   const audioHeader = document.createElement("div");
   audioHeader.className =
@@ -303,7 +302,6 @@ function configureData() {
 function toggleVoiceMode() {
   const voiceButton = document.getElementById("voice-button");
 
-  // Prevent multiple rapid clicks
   if (isToggleInProgress) {
     console.log("Toggle operation in progress, please wait");
     return;
@@ -312,16 +310,13 @@ function toggleVoiceMode() {
   isToggleInProgress = true;
 
   if (isWebRTCActive) {
-    // First update UI to show we're processing
     voiceButton.classList.remove("recording", "bg-red-600", "hover:bg-red-700");
     voiceButton.classList.add("bg-yellow-500", "hover:bg-yellow-600"); // Intermediate state
     voiceButton.querySelector(".lucide-mic").classList.add("text-yellow-200");
 
     console.log("Stopping WebRTC connection...");
 
-    // Create a promise to stop WebRTC
     const stopPromise = new Promise((resolve) => {
-      // Stop all tracks first
       if (peerConnection) {
         try {
           peerConnection.getSenders().forEach((sender) => {
@@ -336,7 +331,6 @@ function toggleVoiceMode() {
         }
       }
 
-      // Close data channel
       if (dataChannel) {
         try {
           dataChannel.close();
@@ -346,7 +340,6 @@ function toggleVoiceMode() {
         dataChannel = null;
       }
 
-      // Close peer connection
       if (peerConnection) {
         try {
           peerConnection.close();
@@ -356,18 +349,14 @@ function toggleVoiceMode() {
         peerConnection = null;
       }
 
-      // Force reset state
       isWebRTCActive = false;
 
-      // Resolve after a small timeout to ensure proper cleanup
       setTimeout(resolve, 300);
     });
 
-    // Handle the completion of the stop operation
     stopPromise.then(() => {
       console.log("WebRTC successfully stopped");
 
-      // Update UI back to normal state
       voiceButton.classList.remove("bg-yellow-500", "hover:bg-yellow-600");
       voiceButton
         .querySelector(".lucide-mic")
@@ -378,7 +367,6 @@ function toggleVoiceMode() {
       isToggleInProgress = false;
     });
   } else {
-    // Update UI to recording state
     voiceButton.classList.add("recording", "bg-red-600", "hover:bg-red-700");
     voiceButton.classList.remove(
       "bg-blue-600",
@@ -395,7 +383,6 @@ function toggleVoiceMode() {
 
     console.log("Starting WebRTC connection...");
 
-    // Start WebRTC
     startWebRTC()
       .then(() => {
         console.log("WebRTC connection established");
@@ -404,7 +391,6 @@ function toggleVoiceMode() {
       .catch((error) => {
         console.error("Failed to start WebRTC:", error);
 
-        // Reset UI on error
         voiceButton.classList.remove(
           "recording",
           "bg-red-600",
@@ -430,7 +416,6 @@ async function startWebRTC() {
   if (isWebRTCActive || peerConnection || dataChannel) {
     console.log("WebRTC resources exist, forcing cleanup first");
     await new Promise((resolve) => {
-      // Properly clean up existing resources
       try {
         if (peerConnection) {
           peerConnection.getSenders().forEach((sender) => {
@@ -455,7 +440,6 @@ async function startWebRTC() {
         console.error("Error in forced cleanup:", e);
       }
 
-      // Small delay to ensure cleanup is complete
       setTimeout(resolve, 300);
     });
   }
@@ -500,7 +484,6 @@ async function startWebRTC() {
   } catch (error) {
     console.error("WebRTC Error:", error);
 
-    // Ensure everything is cleaned up on error
     if (peerConnection) {
       try {
         peerConnection.close();
@@ -536,87 +519,47 @@ function showDocument(doc) {
   }
 
   if (window.innerWidth < 768) {
-    docViewer.classList.add("fixed", "inset-0", "z-50", "p-4", "bg-black/90");
+    docViewer.classList.add(
+      "fixed",
+      "absolute",
+      "top-[20px]",
+      "right-[200px]",
+      "z-50",
+      "p-4",
+      "bg-black/90",
+      "flex",
+      "items-center",
+      "justify-center"
+    );
   }
 
   let contentHtml = "";
-  const fileType = doc.file_type || "unknown";
+  const fileType = doc.file_type;
+  console.log("File type:", fileType);
 
-  if (doc.file && doc.file.length > 0) {
-    if (fileType === "pdf") {
-      contentHtml = `
-        <div class="h-full flex flex-col">
-          <iframe 
-            class="w-full h-full rounded-lg border border-blue-500/30" 
-            src="data:application/pdf;base64,${doc.file}" 
-            type="application/pdf"
-          ></iframe>
-        </div>
-      `;
-    } else if (fileType === "docx" || fileType === "doc") {
-      contentHtml = `
-        <div class="border-l-4 border-blue-500 rounded-r-2xl p-4 mt-4 shadow-lg backdrop-blur-sm">
-            <div class="text-sm text-blue-300 mb-3 flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-            </svg>
-            Document Preview
-            </div>
-            <p class="text-white leading-relaxed">${
-              doc.content_preview || "Document preview not available"
-            }</p>
-            <div class="flex items-center mt-3 text-blue-400 text-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                <line x1="16" y1="2" x2="16" y2="6"></line>
-                <line x1="8" y1="2" x2="8" y2="6"></line>
-                <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-            Page ${doc.page}
-            </div>
-            <a 
-            class="inline-flex items-center mt-4 bg-blue-600/50 hover:bg-blue-500 text-white py-2 px-4 rounded border border-blue-500 transition-colors"
-            href="data:application/octet-stream;base64,${doc.file}" 
-            download="${doc.filename}"
-            >
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            Download Document
-            </a>
-        </div>
-        `;
-    } else {
-      contentHtml = `
-        <div class="border-l-4 border-blue-500 rounded-r-2xl p-4 mt-4 shadow-lg backdrop-blur-sm">
-          <div class="text-sm text-blue-300 mb-3 flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-            </svg>
-            Document Preview
-          </div>
-          <p class="text-white leading-relaxed">${
-            doc.content_preview || "Document preview not available"
-          }</p>
-          <div class="flex items-center mt-3 text-blue-400 text-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-            Page ${doc.page}
-          </div>
+  // Handle different file types
+  if (fileType === "pdf") {
+    contentHtml = `
+      <div class="h-full flex flex-col">
+        <iframe 
+          class="w-full h-full rounded-lg border border-blue-500/30" 
+          src="data:application/pdf;base64,${doc.file}" 
+          type="application/pdf"
+        ></iframe>
+      </div>
+    `;
+  } else if (fileType === "docx" || fileType === "doc") {
+    // For DOCX files, we'll provide a download button and a preview container
+    contentHtml = `
+      <div class="h-full flex flex-col">
+        <div class="bg-blue-900/30 p-4 mb-4 rounded-lg border border-blue-500/30">
+          <p class="text-blue-300 mb-3">Microsoft Word documents can't be displayed directly in the browser.</p>
           <a 
-            class="inline-flex items-center mt-4 bg-blue-600/50 hover:bg-blue-500 text-white py-2 px-4 rounded border border-blue-500 transition-colors"
-            href="data:application/octet-stream;base64,${doc.file}" 
+            href="data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${doc.file}" 
             download="${doc.filename}"
+            class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded flex items-center justify-center w-full md:w-auto"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -624,28 +567,43 @@ function showDocument(doc) {
             Download Document
           </a>
         </div>
-      `;
-    }
-  } else {
-    contentHtml = `
-      <div class="border-l-4 border-blue-500 rounded-r-2xl p-4 mt-4 shadow-lg backdrop-blur-sm">
-        <div class="text-sm text-blue-300 mb-3 flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="8" x2="12" y2="12"></line>
-              <line x1="12" y1="16" x2="12.01" y2="16"></line>
-          </svg>
-          Notice
+        <div class="flex-grow overflow-auto bg-white/5 rounded-lg border border-blue-500/30 p-4">
+          <div class="bg-white/10 p-6 rounded-lg">
+            <div class="flex items-center justify-center h-full">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-blue-400 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <line x1="10" y1="9" x2="8" y2="9"></line>
+              </svg>
+              <div class="text-xl font-semibold text-blue-200">${doc.filename}</div>
+            </div>
+          </div>
         </div>
-        <p class="text-white">Document content is not available for preview.</p>
-        <div class="flex items-center mt-3 text-blue-400 text-sm">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="16" y1="2" x2="16" y2="6"></line>
-            <line x1="8" y1="2" x2="8" y2="6"></line>
-            <line x1="3" y1="10" x2="21" y2="10"></line>
+      </div>
+    `;
+  } else {
+    // Default for other file types
+    contentHtml = `
+      <div class="h-full flex flex-col items-center justify-center">
+        <div class="bg-blue-900/30 p-6 rounded-lg border border-blue-500/30 text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 text-blue-400 mx-auto mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
           </svg>
-          Page ${doc.page}
+          <a 
+            href="data:application/octet-stream;base64,${doc.file}" 
+            download="${doc.filename}"
+            class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded inline-flex items-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Download Document
+          </a>
         </div>
       </div>
     `;
@@ -674,7 +632,6 @@ function showDocument(doc) {
     </div>
     `;
 
-  // Add fade-in animation
   docViewer.style.opacity = "0";
   docViewer.style.transition = "opacity 0.3s ease-in-out";
 
@@ -691,7 +648,6 @@ function closeDocument() {
   const docViewer = document.getElementById("document-viewer");
   const chatContainer = document.getElementById("chat-container");
 
-  // Add fade-out animation
   docViewer.style.opacity = "0";
   docViewer.style.transition = "opacity 0.3s ease-in-out";
 

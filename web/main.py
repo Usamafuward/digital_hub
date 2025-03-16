@@ -37,7 +37,7 @@ app, rt = fast_app(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # The backend API URL - make sure this points to your FastAPI backend
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+BACKEND_URL = os.getenv("BACKEND_URL")
 
 @app.on_event("startup")
 async def startup_event():
@@ -63,7 +63,11 @@ def get_hero_section():
     return Div(
         Div(
             Div(
-                H1("DIGITAL HUB", cls="text-2xl md:text-5xl font-bold tracking-tight text-center text-white"),
+                Img(
+                    src="/static/logo.png",
+                    alt="Company Support Chatbot",
+                    cls="w-96 mx-auto mb-14 sm:mb-20"
+                ),
             ),
             Div(
                 Div(
@@ -72,7 +76,7 @@ def get_hero_section():
                         cls="text-4xl md:text-5xl font-bold tracking-tight text-center text-white"
                     ),
                     H1(
-                        Span("AI Support", cls="text-blue-400"), " Chatbots",
+                        Span("AI Support", cls="text-blue-400"), " Chatbots", 
                         cls="text-4xl md:text-5xl font-bold tracking-tight text-center text-white"
                     ),
                     cls="space-y-4"
@@ -91,11 +95,12 @@ def get_hero_section():
                     ),
                     cls="flex justify-center"
                 ),
-                cls="my-auto mx-auto px-4 py-20 text-center space-y-10"
+                cls="my-auto mx-auto px-4 text-center space-y-10"
             ),
-            cls="container flex-1 items-center justify-center"
+            cls="flex-1 items-center justify-center"
         ),
-        cls="h-screen flex items-center"
+        cls="container h-screen flex items-center",
+        id="hero-section"
     )
 
 def get_chat_interface():
@@ -103,14 +108,21 @@ def get_chat_interface():
     return Div(
         Div(
             Div(
+                Img(
+                    src="/static/logo.png",
+                    alt="Company Support Chatbot",
+                    cls="w-56 mx-auto mb-7"
+                ),
+            ),
+            Div(
                 Div(
                     Div(
-                        ScrollArea(
+                        Div(
                             Div(
                                 id="chat-messages",
-                                cls="flex flex-col space-y-6"
+                                cls="flex flex-col space-y-6 overflow-x-hidden overflow-y-auto scrollbar-visible h-[570px] pr-3"
                             ),
-                            cls="h-full mx-4 px-1 pb-2"
+                            cls="h-full px-1 pb-2"
                         ),
                         Div(
                             Div(
@@ -143,23 +155,23 @@ def get_chat_interface():
                                 ),
                                 cls="flex w-full rounded-r-full rounded-l-full bg-transparent relative"
                             ),
-                            cls="px-4"
+                            id="chat-input",
                         ),
-                        cls="h-[600px] flex flex-col justify-between w-full transition-all duration-300"
+                        cls="h-[620px] flex flex-col justify-between w-full transition-all duration-300"
                     ),
                     id="chat-container",
                     cls="w-full max-w-5xl transition-all duration-300",
                 ),
                 Div(
                     id="document-viewer",
-                    cls="hidden ml-10 bg-blue-950/30 backdrop-blur-sm rounded-xl border border-blue-800 shadow-xl p-6 overflow-hidden h-[600px] w-full transition-all duration-300"
+                    cls="hidden ml-10 bg-blue-950/30 backdrop-blur-sm rounded-xl border border-blue-800 shadow-xl p-6 overflow-hidden h-[620px] w-full transition-all duration-300"
                 ),
-                cls="flex w-full justify-center"
+                cls="flex-1 md:flex w-full justify-center items-center",
             ),
-            cls="w-full mx-auto"
+            cls="flex-1 w-full items-center"
         ),
         id="chat-section",
-        cls="container min-h-screen mx-auto px-4 py-16"
+        cls="container h-screen px-4 pt-7"
     )
 
 @rt('/')
