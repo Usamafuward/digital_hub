@@ -322,7 +322,7 @@ async def text_chat(query: TextQuery):
         llm = ChatOpenAI(model_name=CHAT_MODEL, temperature=0)
         
         system_prompt = """You are a helpful support chatbot. Answer the user's question based ONLY on the following context from company documents.
-        If the information is not in the context, say you don't know."""
+        If the information is not in the context, say you don't know the provided context does not contain information about your question."""
         
         messages = [
             {"role": "system", "content": system_prompt},
@@ -332,7 +332,7 @@ async def text_chat(query: TextQuery):
         response = llm.invoke(messages)
 
         # If the response indicates no relevant information, return without references
-        if "don't know" in response.content.lower() or "couldn't find" in response.content.lower():
+        if "don't know" in response.content.lower() or "couldn't find" or "does not contain information" in response.content.lower():
             print("LLM indicated no relevant information, returning without references")
             return ChatResponse(answer=response.content, references=[])
 
