@@ -3,4 +3,3 @@ venv
 .sesskey
 vector_store
 __pycache__/
-documents
