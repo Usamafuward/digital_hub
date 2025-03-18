@@ -15,6 +15,7 @@ from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import ChatOpenAI
 import base64
+import traceback
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -76,22 +77,17 @@ def extract_text_and_tables_from_pdf(file_path: str) -> Dict[int, Dict]:
     doc = fitz.open(file_path)
     
     for page_num, page in enumerate(doc):
-        print(f"Processing PDF page {page_num+1}/{len(doc)}")
         page_text = page.get_text()
         page_tables = []
         tables = page.find_tables()
         if tables and tables.tables:
-            print(f"Found {len(tables.tables)} tables on page {page_num+1}")
             for table_idx, table in enumerate(tables.tables):
-                print(f"Processing table {table_idx+1} on page {page_num+1}")
                 df = pd.DataFrame([[str(cell) if hasattr(cell, 'text') else str(cell) for cell in row] for row in table.cells])
                 page_tables.append(df.to_dict())
 
         page_images = []
         images = page.get_images(full=True)
-        print(f"Found {len(images)} images on page {page_num+1}")
         for img_index, img in enumerate(images):
-            print(f"Processing image {img_index+1} on page {page_num+1}")
             xref = img[0]
             base_image = doc.extract_image(xref)
             image_data = base_image["image"]
@@ -114,48 +110,42 @@ def extract_text_and_tables_from_pdf(file_path: str) -> Dict[int, Dict]:
     return result
 
 def extract_text_and_tables_from_docx(file_path: str) -> Dict[int, Dict]:
-    """Extract text, tables, and images from a DOCX file."""
+    """Extract text, tables, and images from a DOCX file with improved page detection."""
     print(f"Extracting content from DOCX: {file_path}")
     result = {}
     doc = docx.Document(file_path)
 
-    all_text = ""
-    page_breaks = [0]
+    CHARS_PER_PAGE = 3000
     
-    print(f"Processing {len(doc.paragraphs)} paragraphs in DOCX")
-    for para_idx, para in enumerate(doc.paragraphs):
-        if para_idx % 50 == 0:
-            print(f"Processing paragraph {para_idx+1}/{len(doc.paragraphs)}")
+    all_text = ""
+    for para in doc.paragraphs:
         all_text += para.text + "\n"
-        if "PAGEBREAK" in para.text.upper():
-            print(f"Detected page break at paragraph {para_idx+1}")
-            page_breaks.append(len(all_text))
 
-    page_breaks.append(len(all_text))
+    total_chars = len(all_text)
+    num_pages = max(1, total_chars // CHARS_PER_PAGE + (1 if total_chars % CHARS_PER_PAGE > 0 else 0))
 
-    all_tables = []
-    print(f"Processing {len(doc.tables)} tables in DOCX")
-    for table_idx, table in enumerate(doc.tables):
-        print(f"Processing table {table_idx+1}/{len(doc.tables)}")
-        table_data = []
-        for row in table.rows:
-            row_data = [cell.text for cell in row.cells]
-            table_data.append(row_data)
-        all_tables.append(pd.DataFrame(table_data).to_dict())
-
-    tables_per_page = {}
-    if all_tables:
-        tables_per_page = {0: all_tables}
-
-    print(f"Creating {len(page_breaks)-1} pages from DOCX")
-    for i in range(len(page_breaks) - 1):
-        start_idx = page_breaks[i]
-        end_idx = page_breaks[i + 1]
+    for page_num in range(num_pages):
+        start_idx = page_num * CHARS_PER_PAGE
+        end_idx = min((page_num + 1) * CHARS_PER_PAGE, total_chars)
         page_text = all_text[start_idx:end_idx]
+
+        tables_for_page = []
+        total_tables = len(doc.tables)
+        tables_start_idx = (page_num * total_tables) // num_pages
+        tables_end_idx = ((page_num + 1) * total_tables) // num_pages
         
-        result[i] = {
+        for table_idx in range(tables_start_idx, tables_end_idx):
+            if table_idx < total_tables:
+                table = doc.tables[table_idx]
+                table_data = []
+                for row in table.rows:
+                    row_data = [cell.text for cell in row.cells]
+                    table_data.append(row_data)
+                tables_for_page.append(pd.DataFrame(table_data).to_dict())
+        
+        result[page_num] = {
             "text": page_text,
-            "tables": tables_per_page.get(i, []),
+            "tables": tables_for_page,
             "images": []
         }
     
@@ -164,17 +154,15 @@ def extract_text_and_tables_from_docx(file_path: str) -> Dict[int, Dict]:
 
 async def process_document(file_path: str, filename: str) -> str:
     """Process a document and add it to the vector store."""
-    print(f"Starting processing of document: {filename}")
+    print(f"Processing document: {filename}")
     file_extension = Path(filename).suffix.lower()
     document_id = str(uuid.uuid4())
     
     try:
         if file_extension == '.pdf':
-            print(f"Processing as PDF: {filename}")
             content = extract_text_and_tables_from_pdf(file_path)
             file_type = "pdf"
         elif file_extension in ['.docx', '.doc']:
-            print(f"Processing as DOCX: {filename}")
             content = extract_text_and_tables_from_docx(file_path)
             file_type = "docx"
         else:
@@ -182,7 +170,6 @@ async def process_document(file_path: str, filename: str) -> str:
             print(error_msg)
             raise ValueError(error_msg)
 
-        print(f"Storing metadata for document: {filename} (id: {document_id})")
         document_metadata[document_id] = {
             "filename": filename,
             "file_type": file_type,
@@ -194,15 +181,13 @@ async def process_document(file_path: str, filename: str) -> str:
         texts = []
         metadatas = []
         
-        print(f"Creating chunks for {len(content)} pages")
         for page_num, page_data in content.items():
-            page_text = page_data["text"]
+            page_text = page_data["text"].lower()
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=CHUNK_SIZE,
                 chunk_overlap=CHUNK_OVERLAP
             )
             chunks = text_splitter.split_text(page_text)
-            print(f"Page {page_num+1}: Created {len(chunks)} chunks")
             
             for i, chunk in enumerate(chunks):
                 texts.append(chunk)
@@ -227,7 +212,6 @@ async def process_document(file_path: str, filename: str) -> str:
 
         print(f"Saving vector store to {VECTOR_STORE_DIR}")
         vectorstore.save_local(str(VECTOR_STORE_DIR))
-        print(f"Successfully processed document: {filename} (id: {document_id})")
         
         return document_id
         
@@ -241,6 +225,7 @@ def format_reference(metadata: Dict[str, Any], content: str) -> Dict[str, Any]:
     doc_metadata = document_metadata.get(document_id, {})
     file_type = doc_metadata.get("file_type", "unknown")
     filename = metadata.get("filename", "unknown")
+    page_number = metadata.get("page", 0)
     
     if file_type == "unknown":
         file_extension = filename.split('.')[-1].lower()
@@ -254,18 +239,17 @@ def format_reference(metadata: Dict[str, Any], content: str) -> Dict[str, Any]:
         with open(file_path, "rb") as file:
             document_binary = file.read()
             document_base64 = base64.b64encode(document_binary).decode('utf-8')
-            
-    print(f"Formatting reference for {filename}")
 
     return {
         "filename": filename,
         "file_type": file_type,
         "file": document_base64,
+        "page": page_number,
     }
 
 async def load_existing_documents():
     """Load and process all documents from the documents directory."""
-    print(f"Checking for existing documents in {DOCUMENTS_DIR}")
+    print("Checking for existing documents")
     
     document_files = list(DOCUMENTS_DIR.glob("**/*"))
     supported_extensions = ['.pdf', '.doc', '.docx']
@@ -279,7 +263,6 @@ async def load_existing_documents():
     
     for file_path in document_files:
         try:
-            print(f"Processing existing document: {file_path.name}")
             await process_document(str(file_path), file_path.name)
         except Exception as e:
             print(f"Error processing existing document {file_path.name}: {str(e)}")
@@ -290,7 +273,7 @@ async def load_existing_vector_store() -> None:
     
     if VECTOR_STORE_DIR.exists() and list(VECTOR_STORE_DIR.glob("*")):
         try:
-            print(f"Attempting to load existing vector store from {VECTOR_STORE_DIR}")
+            print("Loading existing vector store")
             embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
             vectorstore = FAISS.load_local(str(VECTOR_STORE_DIR), embeddings, allow_dangerous_deserialization=True)
             print("Successfully loaded existing vector store")
@@ -312,13 +295,23 @@ async def text_chat(query: TextQuery):
         raise HTTPException(status_code=400, detail=error_msg)
     
     try:
-        print("Performing similarity search for query")
-        docs = vectorstore.similarity_search(query.query, k=4)
-        
-        if not docs:
-            print("No relevant documents found")
+        # Simple check for irrelevant queries
+        irrelevant_queries = ["hi", "hello", "hey", "bye", "goodbye", "thanks", "thank you"]
+        if query.query.lower().strip() in irrelevant_queries or len(query.query.strip()) < 5:
+            print("Detected irrelevant query, responding without references")
             return ChatResponse(
-                answer="I couldn't find any relevant information in the documents.",
+                answer=get_greeting_response(query.query.lower()),
+                references=[]
+            )
+        
+        standardized_query = query.query.lower()
+        docs = vectorstore.similarity_search(standardized_query, k=4)
+        
+        # Check if the retrieved documents are relevant
+        if not docs or is_irrelevant_match(standardized_query, docs):
+            print("No relevant documents found or low relevance match")
+            return ChatResponse(
+                answer="I couldn't find any relevant information in the documents. Is there something else I can help you with?",
                 references=[]
             )
         
@@ -326,12 +319,10 @@ async def text_chat(query: TextQuery):
         
         context = "\n\n".join([doc.page_content for doc in docs])
         
-        print("Generating answer with OpenAI")
         llm = ChatOpenAI(model_name=CHAT_MODEL, temperature=0)
         
-        system_prompt = """You are a helpful support chatbot. Answer the user's question based ONLY on the following context from company documents. 
-        If the information is not in the context, say you don't know. Include specific page numbers and document names in your answer.
-        DO NOT make up information that is not in the context."""
+        system_prompt = """You are a helpful support chatbot. Answer the user's question based ONLY on the following context from company documents.
+        If the information is not in the context, say you don't know."""
         
         messages = [
             {"role": "system", "content": system_prompt},
@@ -339,7 +330,11 @@ async def text_chat(query: TextQuery):
         ]
         
         response = llm.invoke(messages)
-        print("Generated answer from OpenAI")
+
+        # If the response indicates no relevant information, return without references
+        if "don't know" in response.content.lower() or "couldn't find" in response.content.lower():
+            print("LLM indicated no relevant information, returning without references")
+            return ChatResponse(answer=response.content, references=[])
 
         unique_files = {}
         
@@ -356,8 +351,42 @@ async def text_chat(query: TextQuery):
         return ChatResponse(answer=response.content, references=unique_references)
     
     except Exception as e:
-        print(f"Error processing query: {str(e)}")
+        print(f"Error in text chat: {str(e)}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
+
+def get_greeting_response(query: str) -> str:
+    """Return appropriate responses for greetings and short queries."""
+    if query in ["hi", "hello", "hey"]:
+        return "Hello! How can I help you with your questions about our company documents?"
+    elif query in ["bye", "goodbye"]:
+        return "Goodbye! Feel free to ask if you have more questions."
+    elif query in ["thanks", "thank you"]:
+        return "You're welcome! Let me know if you need anything else."
+    else:
+        return "I'm here to help with questions about our company documents. Could you please provide more details?"
+
+def is_irrelevant_match(query: str, docs: List[Any]) -> bool:
+    """Check if the retrieved documents are actually relevant to the query."""
+    # Simple heuristic: Check if the query terms appear in the documents
+    query_terms = set(query.split())
+    if len(query_terms) <= 2:  # Very short queries might not have good matches
+        return False
+        
+    # Filter out common words that don't carry much meaning
+    stopwords = {"the", "a", "an", "in", "on", "at", "to", "for", "with", "by", "about", "like", "of", "is", "are"}
+    query_terms = query_terms - stopwords
+    
+    # Check if any significant query terms appear in the documents
+    for doc in docs:
+        doc_text = doc.page_content.lower()
+        matches = sum(1 for term in query_terms if term in doc_text)
+        
+        # If more than 30% of significant query terms are in the document, consider it relevant
+        if matches / len(query_terms) > 0.3:
+            return False
+            
+    return True
     
 DEFAULT_INSTRUCTIONS = """You are an expert support assistant for the company. Follow these rules:
 1. Use only information from the company documents
@@ -370,6 +399,7 @@ async def connect_rtc(request: Request):
     """Real-time WebRTC connection endpoint for voice chat."""
     print("RTC connection request received")
     global vectorstore
+    global document_metadata
     
     if not vectorstore:
         error_msg = "Please upload documents first"
@@ -382,16 +412,20 @@ async def connect_rtc(request: Request):
             raise HTTPException(status_code=400, detail="No SDP provided")
         
         client_sdp = client_sdp.decode()
-        print("Processing RTC connection with SDP")
-        
-        print("Finding top documents for initial context")
-        top_docs = vectorstore.similarity_search("company overview support help", k=2)
-        context = "\n".join([f"Document: {doc.metadata.get('filename', 'Unknown')}, "
-                           f"Page: {doc.metadata.get('page', 0) + 1}\n"
-                           f"{doc.page_content}\n" for doc in top_docs])
 
-        instructions = f"{DEFAULT_INSTRUCTIONS}\n\nHere is some initial context from the company documents:\n{context}"
-        print("Generated instructions with context for voice assistant")
+        context_parts = []
+        for doc_id, doc_info in document_metadata.items():
+            filename = doc_info.get("filename", "Unknown")
+            print(f"Adding document to context: {filename}")
+
+            for page_num, page_data in doc_info.get("content", {}).items():
+                page_text = page_data.get("text", "")
+                if page_text:
+                    context_parts.append(f"Document: {filename}, Page: {page_num + 1}\n{page_text}\n")
+
+        context = "\n".join(context_parts)
+        
+        instructions = f"{DEFAULT_INSTRUCTIONS}\n\nHere is the full context from the company documents:\n{context}"
         
         async with httpx.AsyncClient() as client:
             print("Requesting ephemeral token from OpenAI")
@@ -424,9 +458,6 @@ async def connect_rtc(request: Request):
                 print(error_msg)
                 raise HTTPException(status_code=500, detail=error_msg)
             
-            print("Successfully acquired ephemeral token")
-
-            print("Performing SDP exchange with OpenAI")
             sdp_res = await client.post(
                 OPENAI_API_URL,
                 headers={
@@ -450,21 +481,19 @@ async def connect_rtc(request: Request):
             )
             
     except Exception as e:
-        print(f"Error in RTC connection: {str(e)}", exc_info=True)
+        print(f"Error in RTC connection: {str(e)}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.on_event("startup")
 async def startup_event():
     """Load existing vector store and documents on startup."""
     print("Starting application...")
-
     await load_existing_vector_store()
-
     await load_existing_documents()
-    
     print(f"Startup complete. Vector store initialized: {vectorstore is not None}")
     print(f"Total documents loaded: {len(document_metadata)}")
     
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("api.main:app", host="127.0.0.1", port=8001, reload=True)

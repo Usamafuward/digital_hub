@@ -1,6 +1,18 @@
 document.documentElement.setAttribute("class", "dark");
 
-document.addEventListener("DOMContentLoaded", function () {
+function loadScript(url) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = url;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+document.addEventListener("DOMContentLoaded", async function () {
+  await loadScript("https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js");
+
   document.getElementById("chat-section").style.display = "none";
   document.getElementById("send-button").addEventListener("click", sendMessage);
   document
@@ -79,9 +91,19 @@ function addQA(question, answer, references = null) {
     </svg>
   `;
 
-  const messageContent = document.createElement("p");
-  messageContent.className = "answer-content text-white leading-relaxed";
-  messageContent.textContent = answer;
+  const messageContent = document.createElement("div");
+  messageContent.className =
+    "answer-content text-white leading-relaxed markdown-content";
+
+  // Parse markdown and set as HTML
+  messageContent.innerHTML = marked.parse(answer);
+
+  // Add syntax highlighting for code blocks
+  messageContent.querySelectorAll("pre code").forEach((block) => {
+    if (window.hljs) {
+      hljs.highlightElement(block);
+    }
+  });
 
   messageContentWrapper.appendChild(assistantIcon);
   messageContentWrapper.appendChild(messageContent);
@@ -160,6 +182,24 @@ function addQA(question, answer, references = null) {
   setTimeout(() => {
     messageDiv.scrollIntoView({ behavior: "smooth", block: "start" });
   }, 500);
+}
+
+function showTypingIndicator() {
+  const messagesDiv = document.getElementById("chat-messages");
+  const typingDiv = document.createElement("div");
+  typingDiv.id = "typing-indicator";
+  typingDiv.className = "flex justify-start";
+  typingDiv.innerHTML = `
+    <div class="bg-blue-900/50 text-white rounded-tl-2xl rounded-tr-2xl rounded-br-2xl p-3 max-w-xs md:max-w-md shadow-md backdrop-blur-sm">
+        <div class="flex space-x-2">
+            <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0s"></div>
+            <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+            <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+        </div>
+    </div>
+  `;
+  messagesDiv.appendChild(typingDiv);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
 function showTypingIndicator() {
@@ -403,10 +443,7 @@ function toggleVoiceMode() {
           .querySelector(".lucide-mic")
           .classList.remove("text-red-200", "animate-pulse", "text-yellow-200");
 
-        addQA(
-          "Voice Chat Error",
-          "Failed to start voice chat. Please check your microphone permissions."
-        );
+        addQA("Voice Chat Error", error);
         isToggleInProgress = false;
       });
   }
@@ -535,7 +572,8 @@ function showDocument(doc) {
 
   let contentHtml = "";
   const fileType = doc.file_type;
-  console.log("File type:", fileType);
+  const pageNumber = doc.page || 0; // Get page number, default to 0 if not available
+  console.log("File type:", fileType, "Page:", pageNumber);
 
   // Handle different file types
   if (fileType === "pdf") {
@@ -543,7 +581,7 @@ function showDocument(doc) {
       <div class="h-full flex flex-col">
         <iframe 
           class="w-full h-full rounded-lg border border-blue-500/30" 
-          src="data:application/pdf;base64,${doc.file}" 
+          src="data:application/pdf;base64,${doc.file}#page=${pageNumber + 1}" 
           type="application/pdf"
         ></iframe>
       </div>
@@ -554,8 +592,11 @@ function showDocument(doc) {
       <div class="h-full flex flex-col">
         <div class="bg-blue-900/30 p-4 mb-4 rounded-lg border border-blue-500/30">
           <p class="text-blue-300 mb-3">Microsoft Word documents can't be displayed directly in the browser.</p>
+          <p class="text-blue-300 mb-3">Referenced page: ${pageNumber + 1}</p>
           <a 
-            href="data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${doc.file}" 
+            href="data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${
+              doc.file
+            }" 
             download="${doc.filename}"
             class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded flex items-center justify-center w-full md:w-auto"
           >
@@ -577,7 +618,9 @@ function showDocument(doc) {
                 <line x1="16" y1="17" x2="8" y2="17"></line>
                 <line x1="10" y1="9" x2="8" y2="9"></line>
               </svg>
-              <div class="text-xl font-semibold text-blue-200">${doc.filename}</div>
+              <div class="text-xl font-semibold text-blue-200">${
+                doc.filename
+              }</div>
             </div>
           </div>
         </div>
@@ -592,6 +635,7 @@ function showDocument(doc) {
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
           </svg>
+          <p class="text-blue-300 mb-3">Referenced page: ${pageNumber + 1}</p>
           <a 
             href="data:application/octet-stream;base64,${doc.file}" 
             download="${doc.filename}"
@@ -617,7 +661,7 @@ function showDocument(doc) {
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                     <polyline points="14 2 14 8 20 8"></polyline>
                 </svg>
-                ${doc.filename}
+                ${doc.filename} - Page ${pageNumber + 1}
             </h3>
             <button id="close-doc-btn" class="bg-blue-800/30 hover:bg-blue-700/50 text-blue-300 hover:text-white transition-colors p-2 rounded-full border border-blue-600/50">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

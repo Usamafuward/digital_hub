@@ -1,0 +1,27 @@
+
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: ./web/Dockerfile
+    ports:
+      - "8000:8000"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: ./api/Dockerfile
+    ports:
+      - "8001:8001"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+

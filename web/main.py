@@ -4,7 +4,6 @@ from shad4fast import *
 from starlette.staticfiles import StaticFiles
 import os
 from dotenv import load_dotenv
-import httpx
 import uvicorn
 
 load_dotenv()
@@ -89,7 +88,6 @@ def get_hero_section():
                     Button(
                         "Start Chat", 
                         id="start-chat-btn",
-                        variant="custom",
                         cls="text-white border border-blue-700 font-bold py-3 px-8 rounded-full flex items-center transition-all duration-300",
                         onclick="scrollToChat()"
                     ),
@@ -139,7 +137,6 @@ def get_chat_interface():
                                         cls="flex items-center justify-center"
                                     ),
                                     id="send-button",
-                                    variant="custom",
                                     cls="text-white border border-blue-700 font-bold py-2 px-6 rounded-l-full rounded-r-full transition-colors duration-300 absolute right-4 top-0",
                                     onClick="sendChatMessage()"
                                 ),
@@ -149,7 +146,6 @@ def get_chat_interface():
                                         cls="flex items-center"
                                     ),
                                     id="voice-button",
-                                    variant="custom",
                                     cls="text-white border border-blue-700 font-bold py-2 px-6 rounded-r-full rounded-l-full transition-all duration-300",
                                     onClick="toggleVoiceMode()"
                                 ),
@@ -193,7 +189,7 @@ def run_server():
     config = uvicorn.Config(
         "main:app",
         host="127.0.0.1",
-        port=8001,
+        port=8000,
         log_level="info",
         workers=1,
         reload=True,
