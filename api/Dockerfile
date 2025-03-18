@@ -12,6 +12,6 @@ COPY ./vector_store /app/vector_store
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-EXPOSE 8001
+EXPOSE 8003
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8003"]
