@@ -184,8 +184,6 @@ def get():
 
 def run_server():
     """Run the server with proper configuration"""
-    
-    # Changed the port to 8001 to avoid conflict with the backend on 8000
     config = uvicorn.Config(
         "main:app",
         host="127.0.0.1",
