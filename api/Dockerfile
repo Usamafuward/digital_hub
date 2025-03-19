@@ -7,7 +7,6 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY ./api /app/api
 COPY ./documents /app/documents
-COPY ./vector_store /app/vector_store
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
