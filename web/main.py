@@ -63,9 +63,9 @@ def get_hero_section():
         Div(
             Div(
                 Img(
-                    src="/static/logo.png",
+                    src="/static/logo_white.png",
                     alt="Company Support Chatbot",
-                    cls="w-96 mx-auto mb-14 sm:mb-20"
+                    cls="w-64 sm:w-80 mx-auto mb-12 sm:mb-16"
                 ),
             ),
             Div(
@@ -107,9 +107,9 @@ def get_chat_interface():
         Div(
             Div(
                 Img(
-                    src="/static/logo.png",
+                    src="/static/logo_white.png",
                     alt="Company Support Chatbot",
-                    cls="w-56 mx-auto mb-7"
+                    cls="w-40 mx-auto mb-7"
                 ),
             ),
             Div(
@@ -118,7 +118,7 @@ def get_chat_interface():
                         Div(
                             Div(
                                 id="chat-messages",
-                                cls="flex flex-col space-y-6 overflow-x-hidden overflow-y-auto scrollbar-visible h-[570px] pr-3"
+                                cls="flex flex-col space-y-6 overflow-x-hidden overflow-y-auto scrollbar-visible h-[540px] pr-3"
                             ),
                             cls="h-full px-1 pb-2"
                         ),
@@ -153,14 +153,14 @@ def get_chat_interface():
                             ),
                             id="chat-input",
                         ),
-                        cls="h-[620px] flex flex-col justify-between w-full transition-all duration-300"
+                        cls="h-[550px] flex flex-col justify-between w-full transition-all duration-300"
                     ),
                     id="chat-container",
                     cls="w-full max-w-5xl transition-all duration-300",
                 ),
                 Div(
                     id="document-viewer",
-                    cls="hidden ml-10 bg-blue-950/30 backdrop-blur-sm rounded-xl border border-blue-800 shadow-xl p-6 overflow-hidden h-[620px] w-full transition-all duration-300"
+                    cls="hidden ml-10 bg-blue-950/30 backdrop-blur-sm rounded-xl border border-blue-800 shadow-xl p-6 overflow-hidden h-[550px] w-full transition-all duration-300"
                 ),
                 cls="flex-1 md:flex w-full justify-center items-center",
             ),
