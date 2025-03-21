@@ -321,7 +321,32 @@ function createDataChannel() {
       pendingAssistantAnswer = msg?.item?.content?.[0]?.transcript || "";
 
       if (pendingUserQuestion && pendingAssistantAnswer) {
-        addQA(pendingUserQuestion, pendingAssistantAnswer);
+
+        try {
+          const response = await fetch(
+            `${window.BACKEND_URL}/references_for_query`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                question: pendingUserQuestion || "",
+                answer: pendingAssistantAnswer || "",
+              }),
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error("Failed to get response from server");
+          }
+
+          const data = await response.json();
+          addQA(pendingUserQuestion, pendingAssistantAnswer, data.references);
+        } catch (error) {
+          addQA(pendingUserQuestion, pendingAssistantAnswer);
+        }
+
         pendingUserQuestion = null;
         pendingAssistantAnswer = null;
       }

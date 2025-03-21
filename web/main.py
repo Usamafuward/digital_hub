@@ -153,14 +153,14 @@ def get_chat_interface():
                             ),
                             id="chat-input",
                         ),
-                        cls="h-[550px] flex flex-col justify-between w-full transition-all duration-300"
+                        cls="flex flex-col justify-between w-full transition-all duration-300"
                     ),
                     id="chat-container",
                     cls="w-full max-w-5xl transition-all duration-300",
                 ),
                 Div(
                     id="document-viewer",
-                    cls="hidden ml-10 bg-blue-950/30 backdrop-blur-sm rounded-xl border border-blue-800 shadow-xl p-6 overflow-hidden h-[550px] w-full transition-all duration-300"
+                    cls="hidden ml-10 bg-blue-950/30 backdrop-blur-sm rounded-xl border border-blue-800 shadow-xl p-6 overflow-hidden h-[585px] w-full transition-all duration-300"
                 ),
                 cls="flex-1 md:flex w-full justify-center items-center",
             ),

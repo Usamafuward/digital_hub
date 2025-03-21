@@ -556,6 +556,10 @@ document_metadata = {}
 class TextQuery(BaseModel):
     query: str
     
+class ChatTranscript(BaseModel):
+    question: str
+    answer: str
+    
 class ChatResponse(BaseModel):
     answer: str
     references: List[Dict[str, Any]]
@@ -984,6 +988,68 @@ When you don't know something, just say so politely. Never make up information."
         print(f"Error in RTC connection: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/references_for_query", response_model=ChatResponse)
+async def references_for_query(transcript: ChatTranscript):
+    """Retrieve references for a given text query."""
+    print(f"Query received: {transcript.question}")
+    print(f"Response received: {transcript.answer}")
+    
+    if not vectorstore:
+        error_msg = "No documents have been uploaded"
+        print(error_msg)
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    try:
+        random_phrases = [
+            "hii", "hi", "hello", "hey", "bye", "goodbye", "thanks", "thank you",
+        ]
+        
+        if any(phrase in transcript.question.lower() for phrase in random_phrases):
+            print("Response indicates no relevant information - returning without references")
+            return ChatResponse(answer=transcript.question, references=[])
+        
+        no_info_phrases = [
+            "don't know", 
+            "couldn't find", 
+            "no information", 
+            "not mentioned", 
+            "not available",
+            "not in the context",
+            "not found in the documents",
+            "does not contain information",
+        ]
+        
+        if any(phrase in transcript.answer.lower() for phrase in no_info_phrases):
+            print("Response indicates no relevant information - returning without references")
+            return ChatResponse(answer=transcript.question, references=[])
+        
+        docs_with_scores = vectorstore.similarity_search_with_score(transcript.question, k=10)
+        docs = [doc for doc, score in docs_with_scores if score > 0.7]
+        
+        if not docs:
+            print("No relevant documents found")
+            return ChatResponse(answer=transcript.question, references=[])
+        
+        print(f"Found {len(docs)} relevant documents")
+        
+        unique_files = {}
+        
+        for doc in docs:
+            filename = doc.metadata.get("filename", "Unknown")
+
+            if filename not in unique_files:
+                formatted_ref = format_reference(doc.metadata, doc.page_content)
+                unique_files[filename] = formatted_ref
+
+        unique_references = list(unique_files.values())
+        
+        return ChatResponse(answer=transcript.question, references=unique_references)
+    
+    except Exception as e:
+        print(f"Error in references_for_query: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
 
 @app.on_event("startup")
 async def startup_event():
