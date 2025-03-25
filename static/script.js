@@ -734,3 +734,5 @@ function closeDocument() {
     docViewer.innerHTML = "";
   }, 300);
 }
+
+//-----------------
