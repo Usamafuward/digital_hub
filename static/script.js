@@ -246,6 +246,7 @@ async function sendMessage() {
       throw new Error("Failed to get response from server");
     }
 
+    
     const data = await response.json();
     addQA(question, data.answer, data.references);
   } catch (error) {
@@ -521,7 +522,7 @@ async function startWebRTC() {
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
 
-    const response = await fetch(`${window.BACKEND_URL}/rtc-connect`, {
+    const response = await fetch(`${window.BACKEND_URL}/book-rtc-connect`, {
       method: "POST",
       body: offer.sdp,
       headers: { "Content-Type": "application/sdp" },

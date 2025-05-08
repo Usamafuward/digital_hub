@@ -1158,7 +1158,7 @@ async def get_session_history(session_id: str):
         "queries": queries
     }
 
-@app.post("/rtc-connect")
+@app.post("/book-rtc-connect")
 async def connect_rtc(request: Request):
     """Enhanced real-time WebRTC connection endpoint for voice chat."""
     print("RTC connection request received")

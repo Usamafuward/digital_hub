@@ -781,7 +781,7 @@ async def text_chat(query: TextQuery):
         raise HTTPException(status_code=400, detail=error_msg)
     
     try:
-        simple_messages = ["hi", "hii", "hello", "hey", "bye", "goodbye", "thanks", "thank you"]
+        simple_messages = ["hi", "hii", "hello", "hey", "bye", "goodbye", "thanks", "thank you","kilogram","weight","dimensions","centimeters","city","street","country","handling","Understood"]
         if query.query.lower().strip() in simple_messages:
             print("Simple greeting/farewell detected - processing without references")
             llm = ChatOpenAI(model_name=CHAT_MODEL, temperature=0)
@@ -876,7 +876,15 @@ DEFAULT_INSTRUCTIONS = """You are an expert support assistant for the company. F
 1. Use only information from the company documents
 2. If unsure, say you don't know
 3. Reference document names and page numbers when possible
-4. Keep your answers concise and to the point for voice interaction"""
+4. Keep your answers concise and to the point for voice interaction
+5. If user Ask about create booking ask below question and return it as json
+    5.1. sender, receiver addresses
+    5.2. details of the package or document
+    5.3. weight and dimensions
+    5.4. Address and Shipment Details.
+    5.5. In case of an external pickup, Return toggle must be selected.
+    5.6. send this output as json to /create_booking
+"""
 
 @app.post("/rtc-connect")
 async def connect_rtc(request: Request):
@@ -988,7 +996,229 @@ When you don't know something, just say so politely. Never make up information."
         print(f"Error in RTC connection: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/book-rtc-connect")
+# async def book_connect_rtc(request: Request):
+#     """Real-time WebRTC connection endpoint for booking voice assistant."""
+#     print("Booking RTC connection request received")
     
+#     try:
+#         client_sdp = await request.body()
+#         if not client_sdp:
+#             raise HTTPException(status_code=400, detail="No SDP provided")
+        
+#         client_sdp = client_sdp.decode()
+
+#         # Booking-specific instructions
+#         booking_instructions = """You are a shipment booking assistant. Follow the workflow below strictly:
+#         1.Collect information in this exact order:\n
+#             -Full sender address (street, city, country)\n
+#             -Full receiver address (street, city, country)\n
+#             -Package or document description\n
+#             -Weight in kilograms\n
+#             -Dimensions (length × width × height in cm)\n
+#             -Special handling requirements\n
+#         2.Return pickup needed (yes/no)
+#         3.Ask one question at a time.
+#         4.Do not confirm each detail before proceeding to the next.
+#         5.After collecting all required information:
+#             -Generate a single 6-digit booking number (only once, and reuse it throughout the process).
+#             -Display all collected details, each on a new line. Begin with the booking number. Each new detail must start on a new line in the order above.
+#             like this format:
+#                 -Render address :Full sender address \n
+#                 -Receiver address \n
+#                 -Package or document description \n
+#                 -Weight in kilograms \n
+#                 -Dimensions (length × width × height in cm) \n
+#                 -Special handling requirements \n
+#             -Ask the user for final confirmation.
+#         Only proceed to create the booking after the user gives final confirmation.
+#         If the user wants to correct a detail, handle the correction gracefully and update only the specified part.
+#         **only Booking number should come after confirmation not other**"""
+
+#         async with httpx.AsyncClient() as client:
+#             print("Requesting booking ephemeral token")
+#             token_res = await client.post(
+#                 OPENAI_SESSION_URL,
+#                 headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+#                 json={
+#                     "model": MODEL_ID,
+#                     "modalities": ["audio", "text"],
+#                     "voice": VOICE,
+#                     "input_audio_format": "pcm16",
+#                     "output_audio_format": "pcm16",
+#                     "input_audio_transcription": {
+#                         "model": "whisper-1",
+#                         "language": "en"
+#                     },
+#                 }
+#             )
+
+#             if token_res.status_code != 200:
+#                 error_msg = f"Token request failed: {token_res.status_code}"
+#                 print(error_msg)
+#                 raise HTTPException(status_code=500, detail=error_msg)
+
+#             token_data = token_res.json()
+#             ephemeral_token = token_data.get('client_secret', {}).get('value', '')
+            
+#             if not ephemeral_token:
+#                 raise HTTPException(status_code=500, detail="Invalid token response")
+
+#             sdp_res = await client.post(
+#                 OPENAI_API_URL,
+#                 headers={
+#                     "Authorization": f"Bearer {ephemeral_token}",
+#                     "Content-Type": "application/sdp"
+#                 },
+#                 params={
+#                     "model": MODEL_ID,
+#                     "instructions": booking_instructions,
+#                     "voice": VOICE,
+#                     "context": {
+#                         "booking_flow": True,
+#                         "max_retries": 3,
+#                         "validation_rules": {
+#                             "weight": "numeric",
+#                             "dimensions": "format LxWxH in cm"
+#                         }
+#                     }
+#                 },
+#                 content=client_sdp
+#             )
+
+#             print(f"Booking SDP exchange completed: {sdp_res.status_code}")
+            
+#             return Response(
+#                 content=sdp_res.content,
+#                 media_type='application/sdp',
+#                 status_code=sdp_res.status_code
+#             )
+
+#     except Exception as e:
+#         return Response(
+#             status_code=500,
+#             content={"detail": f"Booking assistant error: {str(e)}"}
+#         )
+async def book_connect_rtc(request: Request):
+    """Unified WebRTC endpoint with dynamic intent routing"""
+    print("Unified RTC connection request received")
+    global vectorstore
+    global document_metadata
+
+    # Common setup for both flows
+    client_sdp = await request.body()
+    if not client_sdp:
+        raise HTTPException(status_code=400, detail="No SDP provided")
+    
+    client_sdp = client_sdp.decode()
+
+    # Dynamic instructions template
+    base_instructions = """Respond based on user intent:
+    - If user mentions booking, shipping, or shipment creation: Use booking workflow
+    - Else: Use general knowledge base
+    ---"""
+
+    # Prepare context for both scenarios
+    context = []
+    if vectorstore and document_metadata:
+        context = [f"Document: {doc_info.get('filename')} ({doc_info.get('file_type')})" 
+                  for doc_id, doc_info in document_metadata.items()]
+    
+    full_instructions = f"""{base_instructions}
+    
+    {DEFAULT_INSTRUCTIONS}
+    
+    {'## Available Documents ##' if context else ''}
+    {chr(10).join(context)}
+    
+    ## Booking Workflow ##
+        1.Collect information in this exact order:\n
+            -Full sender address (street, city, country)\n
+            -Full receiver address (street, city, country)\n
+            -Package or document description\n
+            -Weight in kilograms\n
+            -Dimensions (length × width × height in cm)\n
+            -Special handling requirements\n
+        2.Return pickup needed (yes/no)
+        3.Ask one question at a time.
+        4.Do not confirm each detail before proceeding to the next.
+        5.After collecting all required information:
+            -Generate a single 6-digit booking number (only once, and reuse it throughout the process).
+            -Display all collected details, each on a new line. Begin with the booking number. Each new detail must start on a new line in the order above.
+            like this format:
+                -Booking number : Booking number \n
+                -Render address :Full sender address \n
+                -Receiver address \n
+                -Package or document description \n
+                -Weight in kilograms \n
+                -Dimensions (length × width × height in cm) \n
+                -Special handling requirements \n
+                -Ask the user for final confirmation.
+        Only proceed to create the booking after the user gives final confirmation.
+        If the user wants to correct a detail, handle the correction gracefully and update only the specified part.
+        **only Booking number should come after confirmation not other**"""
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # Get session token
+            token_res = await client.post(
+                OPENAI_SESSION_URL,
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+                json={
+                    "model": MODEL_ID, 
+                    "modalities": ["audio", "text"],
+                    "voice": VOICE, 
+                    "input_audio_format": "pcm16",
+                    "output_audio_format": "pcm16",
+                    "input_audio_transcription": {
+                        "model": "whisper-1",
+                        "language": "en"
+                    },
+                }
+            )
+
+            if token_res.status_code != 200:
+                raise HTTPException(status_code=500, detail="Token request failed")
+
+            token_data = token_res.json()
+            ephemeral_token = token_data.get('client_secret', {}).get('value', '')
+
+            # Dynamic parameter configuration
+            params = {
+                "model": MODEL_ID,
+                "instructions": full_instructions,
+                "voice": VOICE,
+                "context": {
+                    "auto_route": True,
+                    "booking_keywords": ["book", "shipment", "package", "create booking"],
+                    "general_keywords": ["help", "question", "support"]
+                }
+            }
+
+            # Single SDP exchange with dynamic instructions
+            sdp_res = await client.post(
+                OPENAI_API_URL,
+                headers={
+                    "Authorization": f"Bearer {ephemeral_token}",
+                    "Content-Type": "application/sdp"
+                },
+                params=params,
+                content=client_sdp
+            )
+
+            return Response(
+                content=sdp_res.content,
+                media_type='application/sdp',
+                status_code=sdp_res.status_code
+            )
+
+    except Exception as e:
+        return Response(
+            status_code=500,
+            content={"detail": f"Unified assistant error: {str(e)}"}
+        )     
+     
 @app.post("/references_for_query", response_model=ChatResponse)
 async def references_for_query(transcript: ChatTranscript):
     """Retrieve references for a given text query."""
@@ -1002,7 +1232,7 @@ async def references_for_query(transcript: ChatTranscript):
     
     try:
         random_phrases = [
-            "hii", "hi", "hello", "hey", "bye", "goodbye", "thanks", "thank you",
+            "hii", "hi", "hello", "hey", "bye", "goodbye", "thanks", "thank you","book","product","yes","um","address","package","return","kilogram","weight","dimensions","centimeters","city","street","country","handling","Understood"
         ]
         
         if any(phrase in transcript.question.lower() for phrase in random_phrases):
@@ -1018,6 +1248,7 @@ async def references_for_query(transcript: ChatTranscript):
             "not in the context",
             "not found in the documents",
             "does not contain information",
+            "book","product","yes","um","address","package","return","kilogram","weight","dimensions","centimeters","city","street","country","handling","Understood"
         ]
         
         if any(phrase in transcript.answer.lower() for phrase in no_info_phrases):
@@ -1062,4 +1293,4 @@ async def startup_event():
     
 
 if __name__ == "__main__":
-    uvicorn.run("api.main:app", host="127.0.0.1", port=8001, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=True)
