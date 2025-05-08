@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+httpx
+python-fasthtml
+shad4fast

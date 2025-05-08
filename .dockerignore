@@ -1,0 +1,13 @@
+.git
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv
+.vscode
+.idea
+.DS_Store
+*.egg-info
+*.log
+*.sqlite3
