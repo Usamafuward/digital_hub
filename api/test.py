@@ -1,13 +1,14 @@
-# from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, Depends
+# from fastapi import FastAPI, HTTPException, Request, Response
 # from fastapi.middleware.cors import CORSMiddleware
 # from pydantic import BaseModel
 # import os
+# import re
 # import httpx
 # import uuid
-# from typing import List, Dict, Any, Optional, Set
+# from typing import List, Dict, Any, Optional
 # import uvicorn
 # from pathlib import Path
-# import fitz 
+# import fitz  
 # import docx
 # import pandas as pd
 # from langchain_openai import OpenAIEmbeddings
@@ -15,6 +16,7 @@
 # from langchain.text_splitter import RecursiveCharacterTextSplitter
 # from langchain_openai import ChatOpenAI
 # import base64
+# import traceback
 # import json
 # from dotenv import load_dotenv
 
@@ -46,6 +48,7 @@
 # VECTOR_STORE_DIR = Path("vector_store")
 # CHUNK_SIZE = 1000
 # CHUNK_OVERLAP = 200
+# CHARS_PER_PAGE = 3000
 
 # DOCUMENTS_DIR.mkdir(exist_ok=True)
 # VECTOR_STORE_DIR.mkdir(exist_ok=True)
@@ -55,6 +58,10 @@
 
 # class TextQuery(BaseModel):
 #     query: str
+    
+# class ChatTranscript(BaseModel):
+#     question: str
+#     answer: str
     
 # class ChatResponse(BaseModel):
 #     answer: str
@@ -69,99 +76,55 @@
 
 # class DocumentsResponse(BaseModel):
 #     documents: List[DocumentMetadata]
-    
-# class WebRTCSession(BaseModel):
-#     session_id: str
-#     query: Optional[str] = None
 
-# class QueryTranscript(BaseModel):
-#     session_id: str
-#     transcript: str
-    
-# class ConnectionManager:
-#     def __init__(self):
-#         self.active_connections: Dict[str, WebSocket] = {}
-#         self.session_queries: Dict[str, Set[str]] = {}
-        
-#     async def connect(self, websocket: WebSocket, session_id: str):
-#         await websocket.accept()
-#         self.active_connections[session_id] = websocket
-#         self.session_queries[session_id] = set()
-#         print(f"New WebSocket connection: {session_id}")
-        
-#     def disconnect(self, session_id: str):
-#         if session_id in self.active_connections:
-#             del self.active_connections[session_id]
-#         if session_id in self.session_queries:
-#             del self.session_queries[session_id]
-#         print(f"WebSocket disconnected: {session_id}")
-        
-#     async def send_document_update(self, session_id: str, documents: List[Dict[str, Any]]):
-#         if session_id in self.active_connections:
-#             await self.active_connections[session_id].send_json({
-#                 "type": "document_update",
-#                 "documents": documents
-#             })
-            
-#     def add_query(self, session_id: str, query: str):
-#         if session_id in self.session_queries:
-#             self.session_queries[session_id].add(query)
-            
-#     def get_queries(self, session_id: str) -> List[str]:
-#         return list(self.session_queries.get(session_id, set()))
-    
-# manager = ConnectionManager()
+# def clean_text(text: str) -> str:
+#     """Clean extracted text to improve quality and reduce noise."""
+#     # Remove excessive whitespace
+#     text = re.sub(r'\s+', ' ', text)
+#     # Remove page numbers and footer/header artifacts
+#     text = re.sub(r'\b\d+\s*of\s*\d+\b', '', text)
+#     # Remove URLs that might appear in footers
+#     text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
+#     return text.strip()
 
-# def extract_text_and_tables_from_pdf(file_path: str) -> Dict[int, Dict]:
-#     """Extract text, tables, and images from a PDF file."""
-#     print(f"Extracting content from PDF: {file_path}")
+# def extract_text_from_pdf(file_path: str) -> Dict[int, Dict]:
+#     """Extract text from a PDF file maintaining original page numbers."""
+#     print(f"Extracting text from PDF: {file_path}")
 #     result = {}
-#     doc = fitz.open(file_path)
     
-#     for page_num, page in enumerate(doc):
-#         page_text = page.get_text()
-#         page_tables = []
-#         tables = page.find_tables()
-#         if tables and tables.tables:
-#             for table_idx, table in enumerate(tables.tables):
-#                 df = pd.DataFrame([[str(cell) if hasattr(cell, 'text') else str(cell) for cell in row] for row in table.cells])
-#                 page_tables.append(df.to_dict())
-
-#         page_images = []
-#         images = page.get_images(full=True)
-#         for img_index, img in enumerate(images):
-#             xref = img[0]
-#             base_image = doc.extract_image(xref)
-#             image_data = base_image["image"]
-#             image_b64 = base64.b64encode(image_data).decode('utf-8')
-#             page_images.append({
-#                 "image_id": f"img_{page_num}_{img_index}",
-#                 "image_data": image_b64,
-#                 "width": base_image["width"],
-#                 "height": base_image["height"]
-#             })
+#     try:
+#         doc = fitz.open(file_path)
         
-#         result[page_num] = {
-#             "text": page_text,
-#             "tables": page_tables,
-#             "images": page_images
-#         }
+#         for page_num, page in enumerate(doc):
+#             page = doc[page_num]
+#             page_text = page.get_text("text")
+#             cleaned_text = clean_text(page_text)
+            
+#             result[page_num] = {
+#                 "text": cleaned_text,
+#                 "original_page": page_num  # Store the original page number directly
+#             }
+                
+#         doc.close()
+        
+#         print(f"Completed extraction from PDF: {file_path} with {len(result)} pages")
+#         return result
+        
+#     except Exception as e:
+#         print(f"Error extracting text: {str(e)}")
+#         traceback.print_exc()
+#         raise
     
-#     doc.close()
-#     print(f"Completed extraction from PDF: {file_path}")
-#     return result
 
-# def extract_text_and_tables_from_docx(file_path: str) -> Dict[int, Dict]:
-#     """Extract text, tables, and images from a DOCX file with improved page detection."""
-#     print(f"Extracting content from DOCX: {file_path}")
+# def extract_text_from_docx(file_path: str) -> Dict[int, Dict]:
+#     """Extract text from a DOCX file with page numbering."""
+#     print(f"Extracting text from DOCX: {file_path}")
 #     result = {}
 #     doc = docx.Document(file_path)
-
-#     CHARS_PER_PAGE = 3000
     
 #     all_text = ""
 #     for para in doc.paragraphs:
-#         all_text += para.text + "\n"
+#         all_text += clean_text(para.text) + "\n"
 
 #     total_chars = len(all_text)
 #     num_pages = max(1, total_chars // CHARS_PER_PAGE + (1 if total_chars % CHARS_PER_PAGE > 0 else 0))
@@ -170,28 +133,13 @@
 #         start_idx = page_num * CHARS_PER_PAGE
 #         end_idx = min((page_num + 1) * CHARS_PER_PAGE, total_chars)
 #         page_text = all_text[start_idx:end_idx]
-
-#         tables_for_page = []
-#         total_tables = len(doc.tables)
-#         tables_start_idx = (page_num * total_tables) // num_pages
-#         tables_end_idx = ((page_num + 1) * total_tables) // num_pages
-        
-#         for table_idx in range(tables_start_idx, tables_end_idx):
-#             if table_idx < total_tables:
-#                 table = doc.tables[table_idx]
-#                 table_data = []
-#                 for row in table.rows:
-#                     row_data = [cell.text for cell in row.cells]
-#                     table_data.append(row_data)
-#                 tables_for_page.append(pd.DataFrame(table_data).to_dict())
         
 #         result[page_num] = {
 #             "text": page_text,
-#             "tables": tables_for_page,
-#             "images": []
+#             "original_pages": [page_num]
 #         }
     
-#     print(f"Completed extraction from DOCX: {file_path}")
+#     print(f"Completed extraction from DOCX: {file_path} with {len(result)} standardized pages")
 #     return result
 
 # async def process_document(file_path: str, filename: str) -> str:
@@ -202,10 +150,10 @@
     
 #     try:
 #         if file_extension == '.pdf':
-#             content = extract_text_and_tables_from_pdf(file_path)
+#             content = extract_text_from_pdf(file_path)
 #             file_type = "pdf"
 #         elif file_extension in ['.docx', '.doc']:
-#             content = extract_text_and_tables_from_docx(file_path)
+#             content = extract_text_from_docx(file_path)
 #             file_type = "docx"
 #         else:
 #             error_msg = f"Unsupported file type: {file_extension}"
@@ -216,15 +164,14 @@
 #             "filename": filename,
 #             "file_type": file_type,
 #             "total_pages": len(content),
-#             "content": content,
-#             "tables": {page_num: len(page_data.get("tables", [])) for page_num, page_data in content.items()}
+#             "content": content
 #         }
 
 #         texts = []
 #         metadatas = []
         
 #         for page_num, page_data in content.items():
-#             page_text = page_data["text"]
+#             page_text = page_data["text"].lower()
 #             text_splitter = RecursiveCharacterTextSplitter(
 #                 chunk_size=CHUNK_SIZE,
 #                 chunk_overlap=CHUNK_OVERLAP
@@ -259,6 +206,7 @@
         
 #     except Exception as e:
 #         print(f"Error processing document {filename}: {str(e)}")
+#         traceback.print_exc()
 #         raise
 
 # def format_reference(metadata: Dict[str, Any], content: str) -> Dict[str, Any]:
@@ -267,6 +215,7 @@
 #     doc_metadata = document_metadata.get(document_id, {})
 #     file_type = doc_metadata.get("file_type", "unknown")
 #     filename = metadata.get("filename", "unknown")
+#     page_number = metadata.get("page", 0)
     
 #     if file_type == "unknown":
 #         file_extension = filename.split('.')[-1].lower()
@@ -285,6 +234,7 @@
 #         "filename": filename,
 #         "file_type": file_type,
 #         "file": document_base64,
+#         "page": page_number,
 #     }
 
 # async def load_existing_documents():
@@ -323,7 +273,6 @@
 #     else:
 #         print("No existing vector store found")
 
-
 # @app.post("/chat", response_model=ChatResponse)
 # async def text_chat(query: TextQuery):
 #     """Process a text chat query and return an answer with references."""
@@ -335,7 +284,18 @@
 #         raise HTTPException(status_code=400, detail=error_msg)
     
 #     try:
-#         docs = vectorstore.similarity_search(query.query, k=4)
+#         simple_messages = ["hi", "hii", "hello", "hey", "bye", "goodbye", "thanks", "thank you","kilogram","weight","dimensions","centimeters","city","street","country","handling","Understood"]
+#         if query.query.lower().strip() in simple_messages:
+#             print("Simple greeting/farewell detected - processing without references")
+#             llm = ChatOpenAI(model_name=CHAT_MODEL, temperature=0)
+#             response = llm.invoke([
+#                 {"role": "system", "content": "You are a helpful support chatbot. Respond naturally to this greeting."},
+#                 {"role": "user", "content": query.query}
+#             ])
+#             return ChatResponse(answer=response.content, references=[])
+
+#         docs_with_scores = vectorstore.similarity_search_with_score(query.query, k=20)
+#         docs = [doc for doc, score in docs_with_scores if score > 0.7]
         
 #         if not docs:
 #             print("No relevant documents found")
@@ -345,15 +305,23 @@
 #             )
         
 #         print(f"Found {len(docs)} relevant documents")
-        
-#         context = "\n\n".join([doc.page_content for doc in docs])
+
+#         formatted_contexts = []
+#         for i, doc in enumerate(docs):
+#             source = doc.metadata.get("source", f"Document {i+1}")
+#             formatted_contexts.append(f"[{source}]\n{doc.page_content}")
+            
+#         context = "\n\n".join(formatted_contexts)
         
 #         llm = ChatOpenAI(model_name=CHAT_MODEL, temperature=0)
         
 #         system_prompt = """You are a helpful support chatbot. Answer the user's question based ONLY on the following context from company documents.
-#         If the information is not in the context, say you don't know. Reference document names and page numbers when possible.
-
-#         DO NOT make up information that is not in the context and don't use bold and ** characters for reply."""
+#         Each context section is labeled with its source in [brackets].
+        
+#         When answering, prefer to cite specific documents and page numbers like: "According to [Document X, Page Y]..." 
+        
+#         If the information is not in the context, say you don't know the provided context does not contain information about your question.
+#         DO NOT make up information that is not in the context."""
         
 #         messages = [
 #             {"role": "system", "content": system_prompt},
@@ -362,6 +330,32 @@
         
 #         response = llm.invoke(messages)
 
+#         no_info_phrases = [
+#             "Sorry",
+#             "I'm sorry",
+#             "don't know", 
+#             "couldn't find", 
+#             "no information", 
+#             "not mentioned", 
+#             "not available",
+#             "not in the context",
+#             "not found in the documents",
+#             "does not contain information",
+#         ]
+        
+#         if any(phrase in response.content.lower() for phrase in no_info_phrases):
+#             print("Response indicates no relevant information - returning without references")
+#             return ChatResponse(answer=response.content, references=[])
+
+#         files_dict = {}
+        
+#         for doc in docs:
+#             filename = doc.metadata.get("filename", "Unknown")
+#             if filename not in files_dict:
+#                 files_dict[filename] = []
+ 
+#             files_dict[filename].append(doc.metadata)
+        
 #         unique_files = {}
         
 #         for doc in docs:
@@ -377,136 +371,30 @@
 #         return ChatResponse(answer=response.content, references=unique_references)
     
 #     except Exception as e:
-#         print(f"Error processing query: {str(e)}")
+#         print(f"Error in text chat: {str(e)}")
+#         traceback.print_exc()
 #         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
     
 # DEFAULT_INSTRUCTIONS = """You are an expert support assistant for the company. Follow these rules:
 # 1. Use only information from the company documents
 # 2. If unsure, say you don't know
 # 3. Reference document names and page numbers when possible
-# 4. Keep your answers concise and to the point for voice interaction"""
-
-# @app.websocket("/ws/{session_id}")
-# async def websocket_endpoint(websocket: WebSocket, session_id: str):
-#     """WebSocket endpoint for real-time document updates during voice chat."""
-#     try:
-#         await manager.connect(websocket, session_id)
-#         while True:
-#             data = await websocket.receive_text()
-#             try:
-#                 message = json.loads(data)
-#                 if message.get("type") == "query":
-#                     query = message.get("query", "")
-#                     if query and len(query) > 3:
-#                         if vectorstore:
-#                             docs = vectorstore.similarity_search(query, k=3)
-#                             documents = []
-#                             for doc in docs:
-#                                 documents.append({
-#                                     "filename": doc.metadata.get("filename", "Unknown"),
-#                                     "page": doc.metadata.get("page", 0) + 1,
-#                                     "content": doc.page_content[:300] + "..." if len(doc.page_content) > 300 else doc.page_content,
-#                                     "source": f"{doc.metadata.get('filename', 'Unknown')}, Page {doc.metadata.get('page', 0) + 1}"
-#                                 })
-              
-#                             await manager.send_document_update(session_id, documents)
-#                             manager.add_query(session_id, query)
-#             except json.JSONDecodeError:
-#                 pass
-#     except WebSocketDisconnect:
-#         manager.disconnect(session_id)
-
-# @app.post("/rtc/start-session")
-# async def start_rtc_session(session: WebRTCSession):
-#     """Start a new WebRTC session with optional initial query."""
-#     if not session.session_id:
-#         session.session_id = str(uuid.uuid4())
-        
-#     initial_context = ""
-#     if session.query and vectorstore:
-#         docs = vectorstore.similarity_search(session.query, k=3)
-#         initial_context = "\n".join([
-#             f"Document: {doc.metadata.get('filename', 'Unknown')}, "
-#             f"Page: {doc.metadata.get('page', 0) + 1}\n"
-#             f"{doc.page_content}\n" 
-#             for doc in docs
-#         ])
-        
-#     return {
-#         "session_id": session.session_id,
-#         "initial_context": initial_context
-#     }
-
-# @app.post("/rtc/process-transcript")
-# async def process_transcript(query_data: QueryTranscript):
-#     """Process a transcript from the voice chat to extract queries and get relevant documents."""
-#     if not query_data.session_id or not query_data.transcript:
-#         return {"error": "Missing session_id or transcript"}
-    
-#     try:
-#         llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
-        
-#         extract_query_prompt = """
-#         Extract the main question or query from this transcript of a voice conversation.
-#         Return only the most important question or information request.
-#         If there are multiple questions, focus on the most recent or most significant one.
-        
-#         Transcript: {transcript}
-#         """
-        
-#         messages = [
-#             {"role": "system", "content": extract_query_prompt.format(transcript=query_data.transcript)}
-#         ]
-        
-#         response = llm.invoke(messages)
-#         extracted_query = response.content.strip()
-        
-#         if vectorstore and extracted_query:
-#             docs = vectorstore.similarity_search(extracted_query, k=3)
-            
-#             documents = []
-#             for doc in docs:
-#                 documents.append({
-#                     "filename": doc.metadata.get("filename", "Unknown"),
-#                     "page": doc.metadata.get("page", 0) + 1,
-#                     "content": doc.page_content,
-#                     "source": f"{doc.metadata.get('filename', 'Unknown')}, Page {doc.metadata.get('page', 0) + 1}"
-#                 })
-
-#             if query_data.session_id in manager.active_connections:
-#                 await manager.send_document_update(query_data.session_id, documents)
- 
-#             manager.add_query(query_data.session_id, extracted_query)
-            
-#             return {
-#                 "query": extracted_query,
-#                 "documents": documents
-#             }
-        
-#         return {"query": extracted_query, "documents": []}
-        
-#     except Exception as e:
-#         print(f"Error processing transcript: {str(e)}")
-#         return {"error": str(e)}
-
-# @app.get("/rtc/session-history/{session_id}")
-# async def get_session_history(session_id: str):
-#     """Get the history of queries for a specific session."""
-#     if not session_id:
-#         return {"error": "Missing session_id"}
-    
-#     queries = manager.get_queries(session_id)
-    
-#     return {
-#         "session_id": session_id,
-#         "queries": queries
-#     }
+# 4. Keep your answers concise and to the point for voice interaction
+# 5. If user Ask about create booking ask below question and return it as json
+#     5.1. sender, receiver addresses
+#     5.2. details of the package or document
+#     5.3. weight and dimensions
+#     5.4. Address and Shipment Details.
+#     5.5. In case of an external pickup, Return toggle must be selected.
+#     5.6. send this output as json to /create_booking
+# """
 
 # @app.post("/rtc-connect")
 # async def connect_rtc(request: Request):
-#     """Enhanced real-time WebRTC connection endpoint for voice chat."""
+#     """Real-time WebRTC connection endpoint for voice chat with dynamic context handling."""
 #     print("RTC connection request received")
 #     global vectorstore
+#     global document_metadata
     
 #     if not vectorstore:
 #         error_msg = "Please upload documents first"
@@ -514,42 +402,51 @@
 #         raise HTTPException(status_code=400, detail=error_msg)
     
 #     try:
-#         body = await request.body()
-#         body_dict = {}
-        
-#         try:
-#             body_str = body.decode()
-#             if body_str.startswith("{"):
-#                 body_dict = json.loads(body_str)
-#                 client_sdp = body_dict.get("sdp", "")
-#                 session_id = body_dict.get("session_id", str(uuid.uuid4()))
-#                 initial_query = body_dict.get("initial_query", "")
-#             else:
-#                 client_sdp = body_str
-#                 session_id = str(uuid.uuid4())
-#                 initial_query = ""
-#         except:
-#             client_sdp = body.decode()
-#             session_id = str(uuid.uuid4())
-#             initial_query = ""
-        
+#         client_sdp = await request.body()
 #         if not client_sdp:
 #             raise HTTPException(status_code=400, detail="No SDP provided")
+        
+#         client_sdp = client_sdp.decode()
 
-#         query = initial_query if initial_query else "company overview support help"
-#         top_docs = vectorstore.similarity_search(query, k=3)
-#         context = "\n".join([f"Document: {doc.metadata.get('filename', 'Unknown')}, "
-#                            f"Page: {doc.metadata.get('page', 0) + 1}\n"
-#                            f"{doc.page_content}\n" for doc in top_docs])
-
+#         # Create a document inventory instead of sending actual content
+#         document_inventory = []
+#         for doc_id, doc_info in document_metadata.items():
+#             filename = doc_info.get("filename", "Unknown")
+#             file_type = doc_info.get("file_type", "Unknown")
+#             total_pages = doc_info.get("total_pages", 0)
+            
+#             # Create a summary of this document
+#             document_inventory.append({
+#                 "id": doc_id,
+#                 "filename": filename,
+#                 "type": file_type.upper(),
+#                 "pages": total_pages
+#             })
+        
+#         # Create a JSON representation of the document inventory
+#         inventory_json = json.dumps(document_inventory)
+        
+#         print(f"Providing document inventory context with {len(document_inventory)} documents")
+        
+#         # Instructions for dynamic context retrieval
 #         instructions = f"""{DEFAULT_INSTRUCTIONS}
 
-# Here is some initial context from the company documents:
-# {context}
+# Important: You'll receive voice queries from users, but instead of having all document content upfront, follow this process:
 
-# Important: As you chat with the user, the system will automatically retrieve relevant documents 
-# based on the conversation and make them available to you. If you need specific information, 
-# ask clarifying questions and the system will try to find relevant documentation."""
+# 1. Listen carefully to the user's query
+# 2. Based on the query, identify what information or documents might be relevant
+# 3. Respond naturally and conversationally
+
+# Available documents in the knowledge base:
+# {inventory_json}
+
+# When responding:
+# 1. If you need specific information, you can search for it in real-time
+# 2. Cite specific documents when providing information
+# 3. You don't need to see all document content at once - just focus on what's relevant to the current query
+# 4. When you don't know something, just say so politely
+
+# Never make up information. If you're uncertain, say you need to check the documents further."""
         
 #         async with httpx.AsyncClient() as client:
 #             print("Requesting ephemeral token from OpenAI")
@@ -566,6 +463,25 @@
 #                         "model": "whisper-1",
 #                         "language": "en"
 #                     },
+#                     "tools": [
+#                         {
+#                             "type": "function",
+#                             "function": {
+#                                 "name": "search_documents",
+#                                 "description": "Search the knowledge base for information based on a query",
+#                                 "parameters": {
+#                                     "type": "object",
+#                                     "properties": {
+#                                         "query": {
+#                                             "type": "string",
+#                                             "description": "The search query to find relevant information"
+#                                         }
+#                                     },
+#                                     "required": ["query"]
+#                                 }
+#                             }
+#                         }
+#                     ]
 #                 }
 #             )
             
@@ -582,6 +498,35 @@
 #                 print(error_msg)
 #                 raise HTTPException(status_code=500, detail=error_msg)
             
+#             # Register tool handler for dynamic document searching
+#             @app.post("/rtc-tool-call")
+#             async def rtc_tool_call(request: Request):
+#                 tool_data = await request.json()
+                
+#                 if tool_data.get("name") == "search_documents":
+#                     query = tool_data.get("arguments", {}).get("query", "")
+                    
+#                     if not query:
+#                         return {"result": "No query provided"}
+                    
+#                     # Use the vector store to find relevant information
+#                     docs_with_scores = vectorstore.similarity_search_with_score(query, k=5)
+#                     docs = [doc for doc, score in docs_with_scores if score > 0.7]
+                    
+#                     if not docs:
+#                         return {"result": "No relevant information found"}
+                    
+#                     # Format the results in a concise way
+#                     formatted_results = []
+#                     for doc in docs:
+#                         source = doc.metadata.get("source", "Unknown source")
+#                         content = doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
+#                         formatted_results.append(f"{source}: {content}")
+                    
+#                     return {"result": "\n\n".join(formatted_results)}
+                
+#                 return {"result": "Unknown tool call"}
+            
 #             sdp_res = await client.post(
 #                 OPENAI_API_URL,
 #                 headers={
@@ -592,25 +537,206 @@
 #                     "model": MODEL_ID,
 #                     "instructions": instructions,
 #                     "voice": VOICE,
-#                     "session_id": session_id,
+#                     "tool_url": f"{request.base_url}rtc-tool-call"
 #                 },
 #                 content=client_sdp
 #             )
             
 #             print(f"SDP exchange completed with status code {sdp_res.status_code}")
- 
-#             response = Response(
+            
+#             return Response(
 #                 content=sdp_res.content,
 #                 media_type='application/sdp',
-#                 status_code=sdp_res.status_code,
-#                 headers={"X-Session-ID": session_id}
+#                 status_code=sdp_res.status_code
 #             )
             
-#             return response
-            
 #     except Exception as e:
-#         print(f"Error in RTC connection: {str(e)}", exc_info=True)
+#         print(f"Error in RTC connection: {str(e)}")
+#         traceback.print_exc()
 #         raise HTTPException(status_code=500, detail=str(e))
+
+# @app.post("/book-rtc-connect")
+# async def book_connect_rtc(request: Request):
+#     """Unified WebRTC endpoint with dynamic intent routing"""
+#     print("Unified RTC connection request received")
+#     global vectorstore
+#     global document_metadata
+
+#     # Common setup for both flows
+#     client_sdp = await request.body()
+#     if not client_sdp:
+#         raise HTTPException(status_code=400, detail="No SDP provided")
+    
+#     client_sdp = client_sdp.decode()
+
+#     # Dynamic instructions template
+#     base_instructions = """Respond based on user intent:
+#     - If user mentions booking, shipping, or shipment creation: Use booking workflow
+#     - Else: Use general knowledge base
+#     ---"""
+
+#     # Prepare context for both scenarios
+#     context = []
+#     if vectorstore and document_metadata:
+#         context = [f"Document: {doc_info.get('filename')} ({doc_info.get('file_type')})" 
+#                   for doc_id, doc_info in document_metadata.items()]
+    
+#     full_instructions = f"""{base_instructions}
+    
+#     {DEFAULT_INSTRUCTIONS}
+    
+#     {'## Available Documents ##' if context else ''}
+#     {chr(10).join(context)}
+    
+#     ## Booking Workflow ##
+#         1.Collect information in this exact order:\n
+#             -Full sender address (street, city, country)\n
+#             -Full receiver address (street, city, country)\n
+#             -Package or document description\n
+#             -Weight in kilograms\n
+#             -Dimensions (length × width × height in cm)\n
+#             -Special handling requirements\n
+#         2.Return pickup needed (yes/no)
+#         3.Ask one question at a time.
+#         4.Do not confirm each detail before proceeding to the next.
+#         5.After collecting all required information:
+#             -Generate a single 6-digit booking number (only once, and reuse it throughout the process).
+#             -Display all collected details, each on a new line. Begin with the booking number. Each new detail must start on a new line in the order above.
+#             like this format:
+#                 -Booking number : Booking number \n
+#                 -Render address :Full sender address \n
+#                 -Receiver address \n
+#                 -Package or document description \n
+#                 -Weight in kilograms \n
+#                 -Dimensions (length × width × height in cm) \n
+#                 -Special handling requirements \n
+#                 -Ask the user for final confirmation.
+#         Only proceed to create the booking after the user gives final confirmation.
+#         If the user wants to correct a detail, handle the correction gracefully and update only the specified part.
+#         **only Booking number should come after confirmation not other**"""
+    
+#     try:
+#         async with httpx.AsyncClient() as client:
+#             # Get session token
+#             token_res = await client.post(
+#                 OPENAI_SESSION_URL,
+#                 headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+#                 json={
+#                     "model": MODEL_ID, 
+#                     "modalities": ["audio", "text"],
+#                     "voice": VOICE, 
+#                     "input_audio_format": "pcm16",
+#                     "output_audio_format": "pcm16",
+#                     "input_audio_transcription": {
+#                         "model": "whisper-1",
+#                         "language": "en"
+#                     },
+#                 }
+#             )
+
+#             if token_res.status_code != 200:
+#                 raise HTTPException(status_code=500, detail="Token request failed")
+
+#             token_data = token_res.json()
+#             ephemeral_token = token_data.get('client_secret', {}).get('value', '')
+
+#             # Dynamic parameter configuration
+#             params = {
+#                 "model": MODEL_ID,
+#                 "instructions": full_instructions,
+#                 "voice": VOICE,
+#                 "context": {
+#                     "auto_route": True,
+#                     "booking_keywords": ["book", "shipment", "package", "create booking"],
+#                     "general_keywords": ["help", "question", "support"]
+#                 }
+#             }
+
+#             # Single SDP exchange with dynamic instructions
+#             sdp_res = await client.post(
+#                 OPENAI_API_URL,
+#                 headers={
+#                     "Authorization": f"Bearer {ephemeral_token}",
+#                     "Content-Type": "application/sdp"
+#                 },
+#                 params=params,
+#                 content=client_sdp
+#             )
+
+#             return Response(
+#                 content=sdp_res.content,
+#                 media_type='application/sdp',
+#                 status_code=sdp_res.status_code
+#             )
+
+#     except Exception as e:
+#         return Response(
+#             status_code=500,
+#             content={"detail": f"Unified assistant error: {str(e)}"}
+#         )     
+     
+# @app.post("/references_for_query", response_model=ChatResponse)
+# async def references_for_query(transcript: ChatTranscript):
+#     """Retrieve references for a given text query."""
+#     print(f"Query received: {transcript.question}")
+#     print(f"Response received: {transcript.answer}")
+    
+#     if not vectorstore:
+#         error_msg = "No documents have been uploaded"
+#         print(error_msg)
+#         raise HTTPException(status_code=400, detail=error_msg)
+    
+#     try:
+#         random_phrases = [
+#             "hii", "hi", "hello", "hey", "bye", "goodbye", "thanks", "thank you","book","product","yes","um","address","package","return","kilogram","weight","dimensions","centimeters","city","street","country","handling","Understood"
+#         ]
+        
+#         if any(phrase in transcript.question.lower() for phrase in random_phrases):
+#             print("Response indicates no relevant information - returning without references")
+#             return ChatResponse(answer=transcript.question, references=[])
+        
+#         no_info_phrases = [
+#             "don't know", 
+#             "couldn't find", 
+#             "no information", 
+#             "not mentioned", 
+#             "not available",
+#             "not in the context",
+#             "not found in the documents",
+#             "does not contain information",
+#             "book","product","yes","um","address","package","return","kilogram","weight","dimensions","centimeters","city","street","country","handling","Understood"
+#         ]
+        
+#         if any(phrase in transcript.answer.lower() for phrase in no_info_phrases):
+#             print("Response indicates no relevant information - returning without references")
+#             return ChatResponse(answer=transcript.question, references=[])
+        
+#         docs_with_scores = vectorstore.similarity_search_with_score(transcript.question, k=10)
+#         docs = [doc for doc, score in docs_with_scores if score > 0.7]
+        
+#         if not docs:
+#             print("No relevant documents found")
+#             return ChatResponse(answer=transcript.question, references=[])
+        
+#         print(f"Found {len(docs)} relevant documents")
+        
+#         unique_files = {}
+        
+#         for doc in docs:
+#             filename = doc.metadata.get("filename", "Unknown")
+
+#             if filename not in unique_files:
+#                 formatted_ref = format_reference(doc.metadata, doc.page_content)
+#                 unique_files[filename] = formatted_ref
+
+#         unique_references = list(unique_files.values())
+        
+#         return ChatResponse(answer=transcript.question, references=unique_references)
+    
+#     except Exception as e:
+#         print(f"Error in references_for_query: {str(e)}")
+#         traceback.print_exc()
+#         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
 
 # @app.on_event("startup")
 # async def startup_event():
@@ -623,7 +749,7 @@
     
 
 # if __name__ == "__main__":
-#     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+#     uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=True)
 
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware

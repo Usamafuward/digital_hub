@@ -522,7 +522,7 @@ async function startWebRTC() {
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
 
-    const response = await fetch(`${window.BACKEND_URL}/book-rtc-connect`, {
+    const response = await fetch(`${window.BACKEND_URL}/rtc-connect`, {
       method: "POST",
       body: offer.sdp,
       headers: { "Content-Type": "application/sdp" },
