@@ -10,6 +10,42 @@ function loadScript(url) {
   });
 }
 
+const fns = {
+    searchVectorStore: async ({ query }) => {
+        console.log("searchVectorStore function called with query:", query);
+        try {
+            const response = await fetch(
+              `${window.BACKEND_URL}/vector_store_search`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  query: query || "",
+                }),
+              }
+          );
+            if (!response.ok) {
+                return { 
+                    success: false, 
+                    error: `HTTP error! status: ${response.status}` 
+                };
+            }
+            const data = await response.json();
+            return { 
+                success: true, 
+                result: data 
+            };
+        } catch (error) {
+            return { 
+                success: false, 
+                error: error.toString() 
+            };
+        }
+    },
+};
+
 document.addEventListener("DOMContentLoaded", async function () {
   await loadScript("https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js");
 
@@ -312,6 +348,33 @@ function createDataChannel() {
   dataChannel.addEventListener("message", async (ev) => {
     const msg = JSON.parse(ev.data);
 
+    if (msg.type === 'response.function_call_arguments.done') {
+        console.log('Function call received ------------------:', msg);
+        const fn = fns[msg.name];
+        if (fn !== undefined) {
+            console.log(`Calling local function ${msg.name}, parameters ${msg.arguments}`);
+            const args = JSON.parse(msg.arguments);
+            const result = await fn(args);
+            console.log('Result', result);
+            // Send the result back to the remote side
+            const event = {
+                type: 'conversation.item.create',
+                item: {
+                    type: 'function_call_output',
+                    call_id: msg.call_id,
+                    output: JSON.stringify(result),
+                },
+            };
+            dataChannel.send(JSON.stringify(event));
+            
+            // **Add this block immediately after sending the result:**
+            const responseCreateEvent = {
+                type: "response.create"
+            };
+            dataChannel.send(JSON.stringify(responseCreateEvent));
+        }
+    }
+
     if (msg.type === "conversation.item.input_audio_transcription.completed") {
       console.log("User transcript received:", msg);
       pendingUserQuestion = msg?.transcript || "";
@@ -360,6 +423,23 @@ function configureData() {
     type: "session.update",
     session: {
       modalities: ["text", "audio"],
+      tools: [
+          {
+              type: 'function',
+              name: 'searchVectorStore',
+              description: 'Search the vector store and return the result',
+              parameters: {
+                  type: 'object',
+                  properties: {
+                      query: {
+                          type: 'string',
+                          description: 'The search query to perform'
+                      },
+                  },
+                  required: ['query']
+              },
+          },
+      ],
     },
   };
   dataChannel.send(JSON.stringify(event));

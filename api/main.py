@@ -14,9 +14,9 @@ import pandas as pd
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_openai import ChatOpenAI
 import base64
 import traceback
+from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -35,16 +35,20 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     print("OPENAI_API_KEY not found in environment variables")
 
+client = OpenAI(api_key=OPENAI_API_KEY)
+
 MODEL_ID = "gpt-4o-realtime-preview-2024-12-17"
 VOICE = "sage"
 OPENAI_SESSION_URL = "https://api.openai.com/v1/realtime/sessions"
 OPENAI_API_URL = "https://api.openai.com/v1/realtime"
+
 
 EMBEDDING_MODEL = "text-embedding-3-large"
 CHAT_MODEL = "gpt-4o"
 
 DOCUMENTS_DIR = Path("documents")
 VECTOR_STORE_DIR = Path("vector_store")
+VECTOR_STORE_ID = "vs_682d690a20d48191aef3b1fd3cc5cbf3"
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 CHARS_PER_PAGE = 3000
@@ -75,6 +79,9 @@ class DocumentMetadata(BaseModel):
 
 class DocumentsResponse(BaseModel):
     documents: List[DocumentMetadata]
+
+class VectorSearchRequest(BaseModel):
+    query: str
 
 def clean_text(text: str) -> str:
     """Clean extracted text to improve quality and reduce noise."""
@@ -315,58 +322,43 @@ async def text_chat(query: TextQuery):
     """Process a text chat query and return an answer with references."""
     print(f"Chat query received: {query.query}")
     
-    if not vectorstore:
-        error_msg = "No documents have been uploaded"
-        print(error_msg)
-        raise HTTPException(status_code=400, detail=error_msg)
-    
     try:
-        simple_messages = ["hi", "hii", "hello", "hey", "bye", "goodbye", "thanks", "thank you","kilogram","weight","dimensions","centimeters","city","street","country","handling","Understood"]
+        simple_messages = ["hi", "hii", "hello", "hey", "bye", "goodbye", "thanks", "thank you", "kilogram", "weight", "dimensions", "centimeters", "city", "street", "country", "handling", "Understood"]
         if query.query.lower().strip() in simple_messages:
             print("Simple greeting/farewell detected - processing without references")
-            llm = ChatOpenAI(model_name=CHAT_MODEL, temperature=0)
-            response = llm.invoke([
-                {"role": "system", "content": "You are a helpful support chatbot. Respond naturally to this greeting."},
-                {"role": "user", "content": query.query}
-            ])
-            return ChatResponse(answer=response.content, references=[])
-
-        docs_with_scores = vectorstore.similarity_search_with_score(query.query, k=20)
-        docs = [doc for doc, score in docs_with_scores if score > 0.7]
-        
-        if not docs:
-            print("No relevant documents found")
-            return ChatResponse(
-                answer="I couldn't find any relevant information in the documents.",
-                references=[]
+            response = client.chat.completions.create(
+                model=CHAT_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are a helpful support chatbot. Respond naturally to this greeting."},
+                    {"role": "user", "content": query.query}
+                ],
+                temperature=0
             )
+            return ChatResponse(answer=response.choices[0].message.content, references=[])
         
-        print(f"Found {len(docs)} relevant documents")
+        docs_with_scores = vectorstore.similarity_search_with_score(query.query, k=3 )
+        docs = [doc for doc, score in docs_with_scores if score > 0.7]
 
-        formatted_contexts = []
-        for i, doc in enumerate(docs):
-            source = doc.metadata.get("source", f"Document {i+1}")
-            formatted_contexts.append(f"[{source}]\n{doc.page_content}")
-            
-        context = "\n\n".join(formatted_contexts)
+        # Use OpenAI's file search tool
+        response = client.responses.create(
+            model=CHAT_MODEL,
+            input=f"Answer this question based only on the information in the uploaded documents: {query.query}",
+            tools=[{
+                "type": "file_search",
+                "vector_store_ids": [VECTOR_STORE_ID]
+            }]
+        )
         
-        llm = ChatOpenAI(model_name=CHAT_MODEL, temperature=0)
+        # Extract answer and file citations
+        answer = ""
+        references = []
         
-        system_prompt = """You are a helpful support chatbot. Answer the user's question based ONLY on the following context from company documents.
-        Each context section is labeled with its source in [brackets].
+        for item in response.output:
+            if item.type == "message" and hasattr(item, "content"):
+                for content_item in item.content:
+                    if hasattr(content_item, "text"):
+                        answer = content_item.text
         
-        When answering, prefer to cite specific documents and page numbers like: "According to [Document X, Page Y]..." 
-        
-        If the information is not in the context, say you don't know the provided context does not contain information about your question.
-        DO NOT make up information that is not in the context."""
-        
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query.query}"}
-        ]
-        
-        response = llm.invoke(messages)
-
         no_info_phrases = [
             "Sorry",
             "I'm sorry",
@@ -380,10 +372,10 @@ async def text_chat(query: TextQuery):
             "does not contain information",
         ]
         
-        if any(phrase in response.content.lower() for phrase in no_info_phrases):
+        if any(phrase in answer.lower() for phrase in no_info_phrases):
             print("Response indicates no relevant information - returning without references")
-            return ChatResponse(answer=response.content, references=[])
-
+            return ChatResponse(answer=answer, references=[])
+        
         files_dict = {}
         
         for doc in docs:
@@ -403,9 +395,9 @@ async def text_chat(query: TextQuery):
                 unique_files[filename] = formatted_ref
 
         unique_references = list(unique_files.values())
-        
-        print(f"Returning answer with {len(unique_references)} unique file references")
-        return ChatResponse(answer=response.content, references=unique_references)
+            
+        print(f"Returning answer with {len(references)} unique file references")
+        return ChatResponse(answer=answer, references=unique_references)
     
     except Exception as e:
         print(f"Error in text chat: {str(e)}")
@@ -433,7 +425,7 @@ async def book_connect_rtc(request: Request):
         for page_num in sorted(content.keys())[:]:
             page_text = content[page_num].get("text", "")
             if page_text:
-                preview = page_text[:330]
+                preview = page_text[:355]
                 context_summary.append(preview)
         
     context = "\n".join(context_summary)
@@ -476,7 +468,7 @@ BOOKING WORKFLOW:
 5. Ask for final confirmation before completing the booking
 6. If the user wants to correct details, update only the specified part
 
-AVAILABLE DOCUMENTS:
+Available documents context:
 {context}
 
 Remember to stay conversational and helpful throughout the interaction."""
@@ -534,7 +526,30 @@ Remember to stay conversational and helpful throughout the interaction."""
         return Response(
             status_code=500,
             content={"detail": f"Unified assistant error: {str(e)}"}
-        )     
+        )
+
+@app.post("/vector_store_search")
+async def vector_store_search(request: VectorSearchRequest):
+    try:
+        # Now we access the query from the request object
+        query = request.query
+        
+        response = client.responses.create(
+            model=CHAT_MODEL,
+            input=query,
+            tools=[{
+                "type": "file_search",
+                "vector_store_ids": [VECTOR_STORE_ID]
+            }]
+        )
+
+        return response.model_dump()["output"][1]["content"][0]["text"]
+
+    except Exception as e:
+        print(f"Error in vector store search: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
+    
      
 @app.post("/references_for_query", response_model=ChatResponse)
 async def references_for_query(transcript: ChatTranscript):
@@ -573,20 +588,22 @@ async def references_for_query(transcript: ChatTranscript):
         
         # Full phrases that should not trigger references
         exclude_full_phrases = [
-            "booking confirmed", 
+            "booking confirmed", "booking has been confirmed",
             "booking number:", 
             "booking details",
             "special handling", 
             "return pickup", 
-            "package",
+            "package sender address",
+            "package receiver address",
+            "package dimensions",
             "street, city, and country?",
-            "length, width, and height?"
+            "length, width, and height?", "length width height", "length, width, and height",
             "package description", 
-            "kilograms?", 
-            "centimeters?",
+            "kilograms?", "in kilograms."
+            "centimeters?", "in centimeters.",
             "thank you",
-            "summary",
-            "welcome"
+            "summary:", "summary:",
+            "welcome!", "welcome",
         ]
         
         # Check if any no_info_phrases are in the answer
